@@ -1,0 +1,20 @@
+name: tpch_warehouse
+version: "1.0"
+profile: tpch_warehouse
+
+model-paths: ["models"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target"]
+
+vars:
+  as_of: "1998-08-02"
+
+models:
+  tpch_warehouse:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

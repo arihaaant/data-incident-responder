@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: region
+      - name: nation
+      - name: customer
+      - name: part
+      - name: orders
+      - name: lineitem

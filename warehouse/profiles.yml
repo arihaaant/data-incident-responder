@@ -1,0 +1,7 @@
+tpch_warehouse:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('WAREHOUSE_PATH', 'warehouse.duckdb') }}"
+      threads: 4
