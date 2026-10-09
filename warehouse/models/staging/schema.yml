@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_key
+        data_tests: [unique, not_null]
+      - name: nation_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_nations')
+                field: nation_key
+      - name: market_segment
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [AUTOMOBILE, BUILDING, FURNITURE, HOUSEHOLD, MACHINERY]
+
+  - name: stg_orders
+    columns:
+      - name: order_key
+        data_tests: [unique, not_null]
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_key
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [F, O, P]
+      - name: order_date
+        data_tests: [not_null]
+
+  - name: stg_lineitem
+    columns:
+      - name: order_line_id
+        data_tests: [unique, not_null]
+      - name: order_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_key
+      - name: extended_price
+        data_tests: [not_null]
+      - name: discount
+        data_tests: [not_null]
