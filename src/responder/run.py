@@ -12,10 +12,11 @@ from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from . import workspace
+from . import incident_report, workspace
 from .agents import build_graph, build_single_agent
 from .incidents import catalog
 from .llm import make_llm, tracing_callbacks
+from .tools import problems
 
 root = Path(__file__).resolve().parents[2]
 
@@ -62,6 +63,7 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
     scratch = Path(tempfile.gettempdir()) / "responder-work" / f"{out_dir.parent.name}-{out_dir.name}" / inc.id
     work = workspace.prepare(inc, root / "warehouse", kit / "source.duckdb", scratch)
     workspace.build(work)
+    alarms = problems(work).get("problems", [])
     t0 = time.time()
     if system == "rules":
         state = rules_baseline(work)
@@ -78,6 +80,10 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
             "recursion_limit": 40})
     seconds = time.time() - t0
     outcome = state["outcome"]
+    patch = outcome.get("patch")
+    if patch and patch.get("original") is None and (work / patch["file"]).is_file():
+        patch["original"] = (work / patch["file"]).read_text()  # for the diff in the report
+    report = incident_report.render(inc.id, alarms, outcome, state["steps"], work)
 
     fix_check = None
     if outcome["action"] == "patch" and outcome["patch"]:
@@ -91,6 +97,7 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
         "fix_check": fix_check, "score": score(inc, outcome, fix_check), "seconds": round(seconds, 1),
         "steps": state["steps"]}
     (out_dir / f"{inc.id}.json").write_text(json.dumps(record, indent=2, default=str))
+    (out_dir / f"{inc.id}.md").write_text(report, encoding="utf-8")
     return record
 
 
