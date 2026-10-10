@@ -10,7 +10,7 @@ from typing import Literal, Optional, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 max_tool_output = 2500
 max_investigate_steps = 10
@@ -28,7 +28,7 @@ class Triage(BaseModel):
 
 class Diagnosis(BaseModel):
     root_node: str = Field(description="where it started, as source.raw.<table> or model.<name>")
-    root_column: Optional[str] = Field(description="the column at the root, if there is one")
+    root_column: Optional[str] = Field(default=None, description="the column at the root, if there is one")
     cause: Literal["upstream_data", "code_change"]
     action: Literal["patch", "escalate"]
     evidence: str = Field(description="the queries and findings that support this, briefly")
@@ -119,6 +119,32 @@ def policy_check(patch, original):
     return problems
 
 
+async def ask_structured(llm, schema, messages, tries=3):
+    messages = list(messages)
+    tokens = 0
+    for _ in range(tries):
+        out = await llm.with_structured_output(schema, method="function_calling", include_raw=True).ainvoke(messages)
+        tokens += usage(out["raw"])
+        if out["parsed"] is not None:
+            return out["parsed"], tokens
+        messages.append(HumanMessage(f"That was not a valid {schema.__name__} call ({str(out.get('parsing_error'))[:300]}). "
+                                     f"Call {schema.__name__} again with every required field."))
+    raise RuntimeError(f"no valid {schema.__name__} after {tries} tries")
+
+
+def parse_call(schema, call):
+    """A submitted tool call as the schema, or the validation problem to send back to the model."""
+    try:
+        return schema(**call["args"]), None
+    except ValidationError as e:
+        return None, "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()[:5])
+
+
+def clean_name(name):
+    # gpt-oss sometimes leaks its channel prefix into the tool name, e.g. "functions.run_sql"
+    return name.split(".")[-1].strip()
+
+
 def usage(msg):
     u = getattr(msg, "usage_metadata", None) or {}
     return u.get("total_tokens", 0)
@@ -141,8 +167,7 @@ def build_graph(llm, tools):
     investigate_tools = [by_name[n] for n in ("run_sql", "get_lineage", "get_model_sql", "list_tables")]
 
     async def structured(schema, messages):
-        out = await llm.with_structured_output(schema, method="function_calling", include_raw=True).ainvoke(messages)
-        return out["parsed"], usage(out["raw"])
+        return await ask_structured(llm, schema, messages)
 
     async def triage(state):
         result = await by_name["get_test_results"].ainvoke({})
@@ -170,9 +195,17 @@ def build_graph(llm, tools):
                 messages.append(HumanMessage("Call Diagnosis with your conclusion, or keep investigating."))
                 continue
             for call in reply.tool_calls:
+                call = call | {"name": clean_name(call["name"])}
                 if call["name"] == "Diagnosis":
-                    diagnosis = Diagnosis(**call["args"])
+                    diagnosis, problem = parse_call(Diagnosis, call)
+                    if problem:
+                        messages.append(ToolMessage(f"Diagnosis rejected, fix and resend: {problem}",
+                                                    tool_call_id=call["id"]))
+                        continue
                     break
+                if call["name"] not in by_name:
+                    messages.append(ToolMessage(f"unknown tool {call['name']}", tool_call_id=call["id"]))
+                    continue
                 out = short(tool_text(await by_name[call["name"]].ainvoke(call["args"])))
                 steps.append({"agent": "investigate", "tool": call["name"], "args": call["args"], "result": out[:500]})
                 notes.append(f"{call['name']}({json.dumps(call['args'])}) ->\n{out[:1200]}")
@@ -252,11 +285,11 @@ def build_graph(llm, tools):
 
 class Resolution(BaseModel):
     root_node: str = Field(description="where it started, as source.raw.<table> or model.<name>")
-    root_column: Optional[str]
+    root_column: Optional[str] = None
     cause: Literal["upstream_data", "code_change"]
     action: Literal["patch", "escalate"]
-    file: Optional[str] = Field(description="if patching: the model file to replace, e.g. models/staging/stg_orders.sql")
-    sql: Optional[str] = Field(description="if patching: the complete new contents of that file")
+    file: Optional[str] = Field(default=None, description="if patching: the model file to replace, e.g. models/staging/stg_orders.sql")
+    sql: Optional[str] = Field(default=None, description="if patching: the complete new contents of that file")
     evidence: str
 
 
@@ -281,9 +314,17 @@ def build_single_agent(llm, tools):
                 messages.append(HumanMessage("Call Resolution with your conclusion, or keep investigating."))
                 continue
             for call in reply.tool_calls:
+                call = call | {"name": clean_name(call["name"])}
                 if call["name"] == "Resolution":
-                    res = Resolution(**call["args"])
+                    res, problem = parse_call(Resolution, call)
+                    if problem:
+                        messages.append(ToolMessage(f"Resolution rejected, fix and resend: {problem}",
+                                                    tool_call_id=call["id"]))
+                        continue
                     break
+                if call["name"] not in by_name:
+                    messages.append(ToolMessage(f"unknown tool {call['name']}", tool_call_id=call["id"]))
+                    continue
                 out = short(tool_text(await by_name[call["name"]].ainvoke(call["args"])))
                 steps.append({"agent": "single", "tool": call["name"], "args": call["args"], "result": out[:500]})
                 notes.append(f"{call['name']}({json.dumps(call['args'])}) ->\n{out[:1200]}")
@@ -291,10 +332,10 @@ def build_single_agent(llm, tools):
             if res:
                 break
         if res is None:
-            out = await llm.with_structured_output(Resolution, method="function_calling", include_raw=True).ainvoke(
-                [SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
-                                                     "\n\nGive your resolution now.")])
-            res, tokens = out["parsed"], tokens + usage(out["raw"])
+            res, n = await ask_structured(llm, Resolution, [
+                SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                                                    "\n\nGive your resolution now.")])
+            tokens += n
         patch = None
         if res.action == "patch" and res.file and res.sql:
             patch = {"file": res.file, "sql": res.sql, "explanation": res.evidence}
