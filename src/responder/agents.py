@@ -75,6 +75,10 @@ How to work:
 - If the raw table already shows the problem, the cause is upstream data. If the raw data looks normal
   but a model's output is wrong, the cause is that model's code.
 
+Team policy on duplicates: if duplicated rows are identical in every column, the batch was delivered twice and
+the fix is to deduplicate in the staging model (patch). If rows share a key but differ in any column, that is a
+data conflict for the source owner (escalate). Check which one it is with a query before deciding.
+
 Decide:
 - cause: upstream_data if the raw data itself changed or is wrong; code_change if a model's SQL is wrong.
 - action: patch if a change to a dbt model fixes it without hiding or inventing data (for example following
