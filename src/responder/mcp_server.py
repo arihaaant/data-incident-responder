@@ -15,10 +15,10 @@ def make_server(project):
     mcp = FastMCP("warehouse")
 
     @mcp.tool()
-    def list_tables() -> str:
-        """Every table and view in the warehouse with its columns and types. Schemas: raw (landed source
-        data), staging (cleaned), marts (business tables)."""
-        return json.dumps(ws.list_tables())
+    def list_tables(schema: str | None = None) -> str:
+        """Tables and views with their columns and types. Pass a schema to keep it short: raw (landed source
+        data), staging (cleaned) or marts (business tables)."""
+        return json.dumps(ws.list_tables(schema))
 
     @mcp.tool()
     def run_sql(query: str) -> str:

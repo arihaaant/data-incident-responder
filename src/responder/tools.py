@@ -74,11 +74,12 @@ class Workspace:
         return {"columns": cols, "rows": [[str(v) if v is not None else None for v in r] for r in rows[:max_rows]],
                 "truncated": len(rows) > max_rows}
 
-    def list_tables(self):
+    def list_tables(self, schema=None):
         con = duckdb.connect(str(self.db), read_only=True)
         rows = con.execute(
             "select table_schema, table_name, column_name, data_type from information_schema.columns "
-            "order by table_schema, table_name, ordinal_position").fetchall()
+            "where ? is null or table_schema = ? order by table_schema, table_name, ordinal_position",
+            [schema, schema]).fetchall()
         con.close()
         out = {}
         for schema, table, col, typ in rows:

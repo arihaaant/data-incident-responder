@@ -79,3 +79,5 @@ def test_lineage_and_alarms(ws):
 def test_model_sql_and_schema(ws):
     assert "c_mktsegment" in ws.get_model_sql("stg_customers")["sql"]
     assert "raw.customer" in ws.list_tables()
+    assert set(ws.list_tables("marts")) == {"marts.dim_customers", "marts.fct_order_items", "marts.fct_orders",
+                                            "marts.fct_daily_revenue"}
