@@ -1443,5 +1443,65 @@
       "tables_match": true,
       "ok": true
     }
+  },
+  {
+    "id": "inc061",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "description": "raw.lineitem.l_extendedprice now arrives as whole dollars; the cents are gone",
+    "sql": [
+      "alter table raw.lineitem alter column l_extendedprice type bigint using round(l_extendedprice)"
+    ],
+    "edit": null,
+    "split": "dev",
+    "also_accept": [],
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true
+  },
+  {
+    "id": "inc062",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "raw.orders.o_orderdate now arrives as text and 4% of it says 'unknown'",
+    "sql": [
+      "alter table raw.orders alter column o_orderdate type varchar using case when (o_orderkey * 7919) % 100 < 4 then 'unknown' else strftime(o_orderdate, '%Y-%m-%d') end"
+    ],
+    "edit": null,
+    "split": "dev",
+    "also_accept": [],
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_orders"
+    ],
+    "breaks_something": true
+  },
+  {
+    "id": "inc063",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "description": "raw.customer.c_acctbal now arrives as text with one decimal place; the cents are gone",
+    "sql": [
+      "alter table raw.customer alter column c_acctbal type varchar using round(c_acctbal, 1)::varchar"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "also_accept": [],
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_customers"
+    ],
+    "breaks_something": true
   }
 ]

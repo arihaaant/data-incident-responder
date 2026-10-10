@@ -76,6 +76,11 @@ def main(argv=None):
         status = "ok" if row["breaks_something"] and row.get("reference_fix", {"ok": True})["ok"] else "PROBLEM"
         print(f"{inc.id} {inc.kind:12s} {inc.cause:13s} {inc.action:8s} "
               f"fails={len(broken['failed'])} errors={len(broken['errored'])} {status} ({time.time() - t0:.0f}s)")
+    if args.only and (out / "catalog.json").exists():
+        # validating a few incidents updates their rows and keeps the rest
+        kept = {r["id"]: r for r in json.loads((out / "catalog.json").read_text())}
+        kept.update({r["id"]: r for r in rows})
+        rows = [kept[k] for k in sorted(kept)]
     (out / "catalog.json").write_text(json.dumps(rows, indent=2))
 
 
