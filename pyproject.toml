@@ -14,6 +14,7 @@ dependencies = [
     "sqlglot>=25",
     "mcp[cli]>=1.24,<2",
     "langgraph>=1.0",
+    "langchain>=1.0",
     "langchain-openai>=1.0",
     "langchain-mcp-adapters>=0.3",
     "langfuse>=3.0",
