@@ -42,6 +42,12 @@ def make_server(project):
         """The SQL source of a dbt model, e.g. stg_orders."""
         return json.dumps(ws.get_model_sql(name))
 
+    @mcp.tool()
+    def try_patch(file: str, sql: str) -> str:
+        """Test a fix before proposing it: builds the warehouse in a throwaway copy with one model file replaced
+        (e.g. models/staging/stg_orders.sql) and reports any failing checks or build errors."""
+        return json.dumps(ws.try_patch(file, sql))
+
     return mcp
 
 

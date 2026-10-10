@@ -3,12 +3,17 @@
 Plain functions over one incident workspace, so they can be tested directly and wrapped by the mcp server.
 """
 import json
+import re
+import shutil
+import tempfile
 import threading
 from pathlib import Path
 
 import duckdb
 import sqlglot
 from sqlglot import exp
+
+from . import workspace
 
 max_rows = 50
 timeout_s = 5
@@ -104,7 +109,9 @@ class Workspace:
                if i.split(".")[-1] == name or i.endswith(f".{name}") or i == name]
         ids = [i for i in ids if i.startswith(("model.", "source."))]
         if not ids:
-            return {"error": f"unknown model or source {name}"}
+            known = sorted(".".join(i.split(".")[2:]) if i.startswith("source.") else i.split(".")[-1]
+                           for i in list(m["nodes"]) + list(m["sources"]) if i.startswith(("model.", "source.")))
+            return {"error": f"unknown model or source {name}", "known": known}
         uid = ids[0]
         short = lambda i: ".".join(i.split(".")[2:]) if i.startswith("source.") else i.split(".")[-1]
         return {"node": uid,
@@ -113,20 +120,38 @@ class Workspace:
                 "checks": [i.split(".")[2] for i in m["child_map"].get(uid, []) if i.startswith("test.")]}
 
     def get_test_results(self):
-        path = self.project / "target" / "run_results.json"
-        if not path.exists():
-            return {"error": "no run results, the project failed to parse"}
-        out = []
-        for r in json.loads(path.read_text())["results"]:
-            if r["status"] in ("fail", "error"):
-                out.append({"node": r["unique_id"].split(".")[2] if r["unique_id"].startswith("test.")
-                            else r["unique_id"], "status": r["status"],
-                            "failing_rows": r.get("failures"), "message": (r.get("message") or "")[:1500]})
-        skipped = sum(r["status"] == "skipped" for r in json.loads(path.read_text())["results"])
-        return {"problems": out, "skipped_downstream": skipped}
+        return problems(self.project)
 
     def get_model_sql(self, name):
         hits = list((self.project / "models").rglob(f"{name}.sql"))
         if not hits:
             return {"error": f"no model called {name}"}
         return {"path": str(hits[0].relative_to(self.project)).replace("\\", "/"), "sql": hits[0].read_text()}
+
+    def try_patch(self, file, sql):
+        """Build the project with one model file replaced, in a throwaway copy. Nothing here is kept."""
+        f = file.replace("\\", "/")
+        if not re.fullmatch(r"models/(staging|marts)/[a-z_]+\.sql", f) or not (self.project / f).exists():
+            return {"error": f"{file} is not an existing model file"}
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = workspace.copy_project(self.project, Path(tmp) / "project")
+            shutil.copy2(self.db, copy / "warehouse.duckdb")
+            (copy / f).write_text(sql)
+            workspace.build(copy)
+            out = problems(copy)
+        out["passes"] = not out.get("problems") and "error" not in out
+        return out
+
+
+def problems(project):
+    path = Path(project) / "target" / "run_results.json"
+    if not path.exists():
+        return {"error": "no run results, the project failed to parse"}
+    results = json.loads(path.read_text())["results"]
+    out = []
+    for r in results:
+        if r["status"] in ("fail", "error"):
+            out.append({"node": r["unique_id"].split(".")[2] if r["unique_id"].startswith("test.")
+                        else r["unique_id"], "status": r["status"],
+                        "failing_rows": r.get("failures"), "message": (r.get("message") or "")[:1500]})
+    return {"problems": out, "skipped_downstream": sum(r["status"] == "skipped" for r in results)}
