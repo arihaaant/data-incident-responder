@@ -84,7 +84,9 @@ Decide:
 - action: patch if a change to a dbt model fixes it without hiding or inventing data (for example following
   a renamed or retyped source column, removing rows delivered twice, reverting a bad model change);
   escalate if the data is missing or wrong at the source, because no downstream change can honestly fix that.
-- root_node: source.raw.<table> when the cause is upstream data, model.<name> when it is a code change.
+- root_node: where the problem started, which is not always the file you would edit to fix it. If a source
+  table changed (a column renamed, retyped, missing, duplicated or late) the root is source.raw.<table>, even
+  though the fix goes in a staging model. Only when a model's own SQL is wrong is the root model.<name>.
 Be efficient: you have at most {steps} tool calls."""
 
 fix_prompt = """You fix a data incident by rewriting one dbt model file. Keep everything else in the file the same.
