@@ -63,8 +63,17 @@ Schemas: raw (data as it lands from upstream), staging (cleaned views, one per r
 Read the failing checks and say what kind of incident this looks like and where to look first."""
 
 investigate_prompt = """You investigate a data incident in a dbt + DuckDB warehouse. Use the tools to find where
-the problem started. Follow lineage upstream from the failing check, compare the model code with the raw data,
-and query the data to confirm. Tables must be written as schema.table (raw, staging, marts).
+the problem started. In SQL, always write tables as schema.table (raw, staging, marts).
+
+How to work:
+- Start from the failing check and walk lineage upstream, one step at a time, until you find the first table
+  where the problem appears. The node just before that one is fine; the first bad one is where it started.
+- At each step compare with the inputs: row counts, distinct keys, and the failing condition itself.
+- Missing values downstream can come from rows that a join dropped or failed to match, not only from nulls
+  in a column. If a joined table has far fewer rows than its input, look at that model's join.
+- Read the SQL of the first bad model and check joins, filters, group bys and column mappings.
+- If the raw table already shows the problem, the cause is upstream data. If the raw data looks normal
+  but a model's output is wrong, the cause is that model's code.
 
 Decide:
 - cause: upstream_data if the raw data itself changed or is wrong; code_change if a model's SQL is wrong.
@@ -230,4 +239,66 @@ def build_graph(llm, tools):
     g.add_edge("fix", "review")
     g.add_conditional_edges("review", after_review, ["fix", "report"])
     g.add_edge("report", END)
+    return g.compile()
+
+
+# baseline: one agent with the same tools and budget, no separate fixer and no reviewer
+
+class Resolution(BaseModel):
+    root_node: str = Field(description="where it started, as source.raw.<table> or model.<name>")
+    root_column: Optional[str]
+    cause: Literal["upstream_data", "code_change"]
+    action: Literal["patch", "escalate"]
+    file: Optional[str] = Field(description="if patching: the model file to replace, e.g. models/staging/stg_orders.sql")
+    sql: Optional[str] = Field(description="if patching: the complete new contents of that file")
+    evidence: str
+
+
+def build_single_agent(llm, tools):
+    by_name = {t.name: t for t in tools}
+    usable = [by_name[n] for n in ("get_test_results", "run_sql", "get_lineage", "get_model_sql", "list_tables")]
+    bound = llm.bind_tools(usable + [Resolution])
+    prompt = investigate_prompt.format(steps=max_investigate_steps + 2) + "\n\nIf you patch: " + fix_prompt
+
+    async def solve(state):
+        messages = [SystemMessage(prompt), HumanMessage(
+            "A dbt build just failed. Find out why, then call Resolution. If the action is patch, include the "
+            "complete new contents of the one model file you change.")]
+        tokens, steps, res, notes = 0, [], None, []
+        for _ in range(max_investigate_steps + 2):
+            if tokens > token_budget:
+                break
+            reply = await bound.ainvoke(messages)
+            tokens += usage(reply)
+            messages.append(reply)
+            if not reply.tool_calls:
+                messages.append(HumanMessage("Call Resolution with your conclusion, or keep investigating."))
+                continue
+            for call in reply.tool_calls:
+                if call["name"] == "Resolution":
+                    res = Resolution(**call["args"])
+                    break
+                out = short(tool_text(await by_name[call["name"]].ainvoke(call["args"])))
+                steps.append({"agent": "single", "tool": call["name"], "args": call["args"], "result": out[:500]})
+                notes.append(f"{call['name']}({json.dumps(call['args'])}) ->\n{out[:1200]}")
+                messages.append(ToolMessage(out, tool_call_id=call["id"]))
+            if res:
+                break
+        if res is None:
+            out = await llm.with_structured_output(Resolution, method="function_calling", include_raw=True).ainvoke(
+                [SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                                                     "\n\nGive your resolution now.")])
+            res, tokens = out["parsed"], tokens + usage(out["raw"])
+        patch = None
+        if res.action == "patch" and res.file and res.sql:
+            patch = {"file": res.file, "sql": res.sql, "explanation": res.evidence}
+        steps.append({"agent": "single", "output": res.model_dump(exclude={"sql"})})
+        return {"steps": steps, "outcome": {
+            "action": "patch" if patch else "escalate", "root_node": res.root_node, "root_column": res.root_column,
+            "cause": res.cause, "patch": patch, "escalated_after_failed_fix": False, "tokens": tokens}}
+
+    g = StateGraph(State)
+    g.add_node("solve", solve)
+    g.set_entry_point("solve")
+    g.add_edge("solve", END)
     return g.compile()
