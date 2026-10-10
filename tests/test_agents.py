@@ -73,3 +73,11 @@ def test_provider_parse_errors_are_retried():
             return "ok"
 
     assert asyncio.run(call_model(Rejects(), [])) == "ok" and Rejects.calls == 3
+
+
+def test_no_conclusion_means_escalate():
+    from responder.agents import undecided
+
+    for schema in (Diagnosis, Resolution):
+        d = undecided(schema)
+        assert d.action == "escalate" and d.root_node == "unknown"

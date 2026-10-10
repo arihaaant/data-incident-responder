@@ -162,6 +162,12 @@ async def ask_structured(llm, schema, messages, tries=3):
     raise RuntimeError(f"no valid {schema.__name__} after {tries} tries")
 
 
+def undecided(schema):
+    # no usable conclusion came back, so nothing is changed and a person takes over
+    return schema(root_node="unknown", cause="upstream_data", action="escalate",
+                  evidence="The investigation did not reach a conclusion; handing over for manual review.")
+
+
 def parse_call(schema, call):
     """A submitted tool call as the schema, or the validation problem to send back to the model."""
     try:
@@ -263,11 +269,14 @@ def build_graph(llm, tools):
                 break
         if diagnosis is None:
             # out of steps: hand the findings over as plain notes, with no tool history to continue from
-            d, n = await structured(Diagnosis, [
-                SystemMessage(investigate_prompt.format(steps=0)),
-                HumanMessage(intro + "\n\nWhat the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
-                             "\n\nGive your diagnosis now.")])
-            diagnosis, tokens = d, tokens + n
+            try:
+                d, n = await structured(Diagnosis, [
+                    SystemMessage(investigate_prompt.format(steps=0)),
+                    HumanMessage(intro + "\n\nWhat the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                                 "\n\nGive your diagnosis now.")])
+                diagnosis, tokens = d, tokens + n
+            except RuntimeError:
+                diagnosis = undecided(Diagnosis)
         steps.append({"agent": "investigate", "output": diagnosis.model_dump()})
         return {"diagnosis": diagnosis.model_dump(), "tokens": tokens, "steps": steps}
 
@@ -403,10 +412,13 @@ def build_single_agent(llm, tools):
             if res:
                 break
         if res is None:
-            res, n = await ask_structured(llm, Resolution, [
-                SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
-                                                    "\n\nGive your resolution now.")])
-            tokens += n
+            try:
+                res, n = await ask_structured(llm, Resolution, [
+                    SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                                                        "\n\nGive your resolution now.")])
+                tokens += n
+            except RuntimeError:
+                res = undecided(Resolution)
         patch = None
         if res.action == "patch" and res.file and res.sql:
             patch = {"file": res.file, "sql": res.sql, "explanation": res.evidence}
