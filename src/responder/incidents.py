@@ -154,6 +154,16 @@ code_late = [
      "trailing week excluded"),
 ]
 
+lossy_retypes = [  # table, column, "<new type> using <expression>", what happened, split
+    ("lineitem", "l_extendedprice", "bigint using round(l_extendedprice)",
+     "raw.lineitem.l_extendedprice now arrives as whole dollars; the cents are gone", "dev"),
+    ("orders", "o_orderdate",
+     f"varchar using case when {pick('o_orderkey', 4)} then 'unknown' else strftime(o_orderdate, '%Y-%m-%d') end",
+     "raw.orders.o_orderdate now arrives as text and 4% of it says 'unknown'", "dev"),
+    ("customer", "c_acctbal", "varchar using round(c_acctbal, 1)::varchar",
+     "raw.customer.c_acctbal now arrives as text with one decimal place; the cents are gone", "holdout"),
+]
+
 staging_for = {"orders": "stg_orders", "customer": "stg_customers", "lineitem": "stg_lineitem",
                "part": "stg_parts", "nation": "stg_nations"}
 
@@ -220,4 +230,11 @@ def catalog():
     # schema drift has no code variants, so it gives up one more upstream variant instead
     drift = [i for i in out if i.kind == "schema_drift" and i.split == "dev"]
     drift[-1].split = "holdout"
+
+    # type changes that lose information. added after the first 60 so their ids stay stable.
+    # the staging model can't get back what the source no longer sends, so the right call is to flag it.
+    for t, col, using, what, split in lossy_retypes:
+        add(kind="schema_drift", cause="upstream_data", action="escalate", root_node=f"source.raw.{t}",
+            root_column=col, description=what, split=split,
+            sql=[f"alter table raw.{t} alter column {col} type {using}"])
     return out
