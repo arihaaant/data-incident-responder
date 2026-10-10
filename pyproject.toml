@@ -12,6 +12,12 @@ dependencies = [
     "dbt-core>=1.9",
     "dbt-duckdb>=1.9",
     "sqlglot>=25",
+    "mcp[cli]>=1.24,<2",
+    "langgraph>=1.0",
+    "langchain-openai>=1.0",
+    "langchain-mcp-adapters>=0.3",
+    "langfuse>=3.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
