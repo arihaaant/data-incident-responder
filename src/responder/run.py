@@ -116,7 +116,7 @@ async def main_async(args):
         async with gate:
             try:
                 r = await run_one(inc, out_dir, llm, kit, golden, args.system)
-            except Exception as e:  # one broken incident shouldn't stop the batch, it gets rerun next time
+            except Exception as e:  # a failed incident writes no result file, so the next invocation retries it
                 print(f"{inc.id} failed to run: {type(e).__name__}: {str(e)[:200]}")
                 return
         s = r["score"]
