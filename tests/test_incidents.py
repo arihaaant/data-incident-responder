@@ -34,3 +34,14 @@ def test_code_edits_target_existing_text():
             text = (project / i.edit["file"]).read_text()
             assert text.count(i.edit["old"]) >= 1, i.id
             assert i.root_node == "model." + Path(i.edit["file"]).stem, i.id
+
+
+def test_scoring_normalizes_node_names_and_accepts_renamed_columns():
+    from responder.run import score
+
+    inc = next(i for i in catalog() if i.id == "inc001")
+    out = {"root_node": "source.tpch_warehouse.raw.orders", "root_column": inc.also_accept[0],
+           "cause": "upstream_data", "action": "patch"}
+    s = score(inc, out, {"ok": True})
+    assert s["root_node_correct"] and s["root_column_correct"] and s["resolved"]
+    assert score(inc, out | {"root_node": "model.tpch_warehouse.stg_orders"}, None)["root_node_correct"] is False

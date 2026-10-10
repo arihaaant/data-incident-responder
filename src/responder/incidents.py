@@ -22,6 +22,7 @@ class Incident:
     sql: list = field(default_factory=list)    # run against the raw tables
     edit: dict | None = None                   # {"file", "old", "new"} applied to the dbt project
     split: str = "dev"
+    also_accept: list = field(default_factory=list)  # other names for the root column, e.g. after a rename
 
     def as_dict(self):
         return asdict(self)
@@ -168,7 +169,7 @@ def catalog():
 
     def rename(t, old, new):
         add(kind="schema_drift", cause="upstream_data", action="patch", root_node=f"source.raw.{t}", root_column=old,
-            description=f"raw.{t}.{old} renamed to {new}; {staging_for[t]} has to follow",
+            also_accept=[new], description=f"raw.{t}.{old} renamed to {new}; {staging_for[t]} has to follow",
             sql=[f"alter table raw.{t} rename column {old} to {new}"])
 
     def retype(t, col, using, looks):
