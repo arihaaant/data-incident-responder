@@ -10,7 +10,9 @@ import duckdb
 
 project_files = ["dbt_project.yml", "profiles.yml", "models", "tests", "macros"]
 mart_tables = ["dim_customers", "fct_order_items", "fct_orders", "fct_daily_revenue"]
-dbt = str(Path(sys.executable).with_name("dbt.exe" if os.name == "nt" else "dbt"))
+# dbt sits next to python in a venv; on colab pip puts it somewhere on the path instead
+_local = Path(sys.executable).with_name("dbt.exe" if os.name == "nt" else "dbt")
+dbt = str(_local) if _local.exists() else shutil.which("dbt") or "dbt"
 
 
 def copy_project(src, dst):
