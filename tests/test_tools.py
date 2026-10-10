@@ -71,6 +71,8 @@ def test_run_sql_caps_rows_and_refuses_writes(ws):
 def test_lineage_and_alarms(ws):
     lin = ws.get_lineage("stg_customers")
     assert "raw.customer" in lin["upstream"] and "dim_customers" in lin["downstream"]
+    assert ws.get_lineage("staging.stg_customers") == lin
+    assert ws.get_lineage("raw.customer")["downstream"] == ["stg_customers"]
     assert any("market_segment" in c for c in lin["checks"])
     problems = ws.get_test_results()["problems"]
     assert any("market_segment" in p["node"] for p in problems)

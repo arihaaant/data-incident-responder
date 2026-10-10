@@ -94,6 +94,9 @@ class Workspace:
         m = self._manifest()
         if m is None:
             return {"error": "no manifest, the project failed to parse"}
+        schema, _, rest = name.partition(".")
+        if rest and schema in ("staging", "marts"):
+            name = rest  # models can be asked for with or without their schema
         ids = [i for i in list(m["nodes"]) + list(m["sources"])
                if i.split(".")[-1] == name or i.endswith(f".{name}") or i == name]
         ids = [i for i in ids if i.startswith(("model.", "source."))]
