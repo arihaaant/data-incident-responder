@@ -1,0 +1,13 @@
+{
+  "marts": {
+    "dim_customers": "1500:1410504a01df8e377950fbd2dc6bc2bb",
+    "fct_order_items": "60175:998fb648aebe669c0af02fef0776c4f0",
+    "fct_orders": "15000:f5743a3ed27ff3392289f46812a3daa4",
+    "fct_daily_revenue": "8585:c68851b84f91e87c75ea33e8bb8bde7d"
+  },
+  "signature": {
+    "tests": "bc704f2c4534b56d91ad6908a0fb77f1",
+    "n_tests": 35,
+    "vars": {}
+  }
+}

@@ -1,0 +1,1447 @@
+[
+  {
+    "id": "inc001",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderpriority",
+    "description": "raw.orders.o_orderpriority renamed to o_order_priority; stg_orders has to follow",
+    "sql": [
+      "alter table raw.orders rename column o_orderpriority to o_order_priority"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_orders"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc002",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_custkey",
+    "description": "raw.orders.o_custkey renamed to o_customer_key; stg_orders has to follow",
+    "sql": [
+      "alter table raw.orders rename column o_custkey to o_customer_key"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_orders"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc003",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "raw.orders.o_orderdate renamed to o_order_date; stg_orders has to follow",
+    "sql": [
+      "alter table raw.orders rename column o_orderdate to o_order_date"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_orders"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc004",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_mktsegment",
+    "description": "raw.customer.c_mktsegment renamed to c_market_segment; stg_customers has to follow",
+    "sql": [
+      "alter table raw.customer rename column c_mktsegment to c_market_segment"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_customers"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc005",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "description": "raw.customer.c_acctbal renamed to c_account_balance; stg_customers has to follow",
+    "sql": [
+      "alter table raw.customer rename column c_acctbal to c_account_balance"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_customers"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc006",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_nationkey",
+    "description": "raw.customer.c_nationkey renamed to c_nation_key; stg_customers has to follow",
+    "sql": [
+      "alter table raw.customer rename column c_nationkey to c_nation_key"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_customers"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc007",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "description": "raw.lineitem.l_discount renamed to l_discount_rate; stg_lineitem has to follow",
+    "sql": [
+      "alter table raw.lineitem rename column l_discount to l_discount_rate"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc008",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "description": "raw.lineitem.l_extendedprice renamed to l_extended_price; stg_lineitem has to follow",
+    "sql": [
+      "alter table raw.lineitem rename column l_extendedprice to l_extended_price"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc009",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_shipdate",
+    "description": "raw.lineitem.l_shipdate renamed to l_ship_date; stg_lineitem has to follow",
+    "sql": [
+      "alter table raw.lineitem rename column l_shipdate to l_ship_date"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc010",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "description": "raw.lineitem.l_discount now arrives as text; stg_lineitem has to read it back",
+    "sql": [
+      "alter table raw.lineitem alter column l_discount type varchar using l_discount::varchar"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc011",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "description": "raw.lineitem.l_extendedprice now arrives as text; stg_lineitem has to read it back",
+    "sql": [
+      "alter table raw.lineitem alter column l_extendedprice type varchar using l_extendedprice::varchar"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_lineitem"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc012",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "raw.orders.o_orderdate now arrives as MM/DD/YYYY text; stg_orders has to read it back",
+    "sql": [
+      "alter table raw.orders alter column o_orderdate type varchar using strftime(o_orderdate, '%m/%d/%Y')"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_orders"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc013",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "description": "raw.customer.c_acctbal now arrives as text; stg_customers has to read it back",
+    "sql": [
+      "alter table raw.customer alter column c_acctbal type varchar using c_acctbal::varchar"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_customers"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc014",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": "p_brand",
+    "description": "raw.part.p_brand renamed to p_brand_name; stg_parts has to follow",
+    "sql": [
+      "alter table raw.part rename column p_brand to p_brand_name"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_parts"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc015",
+    "kind": "schema_drift",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.nation",
+    "root_column": "n_regionkey",
+    "description": "raw.nation.n_regionkey renamed to n_region_key; stg_nations has to follow",
+    "sql": [
+      "alter table raw.nation rename column n_regionkey to n_region_key"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [],
+    "errored": [
+      "model.tpch_warehouse.stg_nations"
+    ],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc016",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_mktsegment",
+    "description": "25% of raw.customer.c_mktsegment arrived empty",
+    "sql": [
+      "update raw.customer set c_mktsegment = null where (c_custkey * 7919) % 100 < 25"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_customers_market_segment.3fd54cb38f"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc017",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_custkey",
+    "description": "10% of raw.orders.o_custkey arrived empty",
+    "sql": [
+      "update raw.orders set o_custkey = null where (o_orderkey * 7919) % 100 < 10"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_orders_customer_key.fcf085bfee"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc018",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "description": "15% of raw.lineitem.l_extendedprice arrived empty",
+    "sql": [
+      "update raw.lineitem set l_extendedprice = null where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 15"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_lineitem_extended_price.953304659d"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc019",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "description": "20% of raw.lineitem.l_discount arrived empty",
+    "sql": [
+      "update raw.lineitem set l_discount = null where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 20"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_lineitem_discount.780a965564"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc020",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "5% of raw.orders.o_orderdate arrived empty",
+    "sql": [
+      "update raw.orders set o_orderdate = null where (o_orderkey * 7919) % 100 < 5"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_orders_order_date.2177a3e8bb"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc021",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_nationkey",
+    "description": "8% of raw.customer.c_nationkey arrived empty",
+    "sql": [
+      "update raw.customer set c_nationkey = null where (c_custkey * 7919) % 100 < 8"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_customers_nation_key.2892159418"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc022",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.nation",
+    "root_column": "n_regionkey",
+    "description": "12% of raw.nation.n_regionkey arrived empty",
+    "sql": [
+      "update raw.nation set n_regionkey = null where (n_nationkey * 7919) % 100 < 12"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_fct_orders_region_name.c82fe35b79"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc023",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "description": "3% of raw.lineitem.l_orderkey arrived empty",
+    "sql": [
+      "update raw.lineitem set l_orderkey = null where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 3"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_lineitem_order_key.992908a611",
+      "test.tpch_warehouse.not_null_stg_lineitem_order_line_id.6855209bf8"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc024",
+    "kind": "null_spike",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "description": "4% of raw.customer.c_custkey arrived empty",
+    "sql": [
+      "update raw.customer set c_custkey = null where (c_custkey * 7919) % 100 < 4"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_customers_customer_key.1484680b2f",
+      "test.tpch_warehouse.relationships_stg_orders_customer_key__customer_key__ref_stg_customers_.18d4b01e8c"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc025",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.dim_customers",
+    "root_column": "region_name",
+    "description": "nation join switched to the customer key",
+    "sql": [],
+    "edit": {
+      "file": "models/marts/dim_customers.sql",
+      "old": "join {{ ref('stg_nations') }} n on c.nation_key = n.nation_key",
+      "new": "left join {{ ref('stg_nations') }} n on c.customer_key = n.nation_key"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_fct_orders_region_name.c82fe35b79"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc026",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": "extended_price",
+    "description": "price only kept for non-returned items",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_lineitem.sql",
+      "old": "l_extendedprice as extended_price,",
+      "new": "case when l_returnflag = 'N' then l_extendedprice end as extended_price,"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_lineitem_extended_price.953304659d"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc027",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": "market_segment",
+    "description": "one market segment nulled out",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_customers.sql",
+      "old": "c_mktsegment as market_segment,",
+      "new": "nullif(trim(c_mktsegment), 'MACHINERY') as market_segment,"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_customers_market_segment.3fd54cb38f"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc028",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.fct_orders",
+    "root_column": "region_name",
+    "description": "customer join on the order key",
+    "sql": [],
+    "edit": {
+      "file": "models/marts/fct_orders.sql",
+      "old": "left join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key",
+      "new": "left join {{ ref('dim_customers') }} c on o.order_key = c.customer_key"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_fct_orders_region_name.c82fe35b79"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc029",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "order date dropped for pending orders",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "o_orderdate as order_date,",
+      "new": "case when o_orderstatus <> 'P' then o_orderdate end as order_date,"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_orders_order_date.2177a3e8bb"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc030",
+    "kind": "null_spike",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": "discount",
+    "description": "zero discounts turned into nulls",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_lineitem.sql",
+      "old": "l_discount as discount,",
+      "new": "case when l_discount > 0 then l_discount end as discount,"
+    },
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.not_null_stg_lineitem_discount.780a965564"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc031",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "description": "2% of raw.orders delivered twice",
+    "sql": [
+      "insert into raw.orders select * from raw.orders where (o_orderkey * 7919) % 100 < 2"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_orders_order_key.93561928ed"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc032",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "description": "8% of raw.orders delivered twice",
+    "sql": [
+      "insert into raw.orders select * from raw.orders where (o_orderkey * 7919) % 100 < 8"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_orders_order_key.93561928ed"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc033",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "description": "20% of raw.orders delivered twice",
+    "sql": [
+      "insert into raw.orders select * from raw.orders where (o_orderkey * 7919) % 100 < 20"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_orders_order_key.93561928ed"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc034",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "description": "3% of raw.lineitem delivered twice",
+    "sql": [
+      "insert into raw.lineitem select * from raw.lineitem where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 3"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_lineitem_order_line_id.e47413f270"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc035",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "description": "10% of raw.lineitem delivered twice",
+    "sql": [
+      "insert into raw.lineitem select * from raw.lineitem where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 10"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_lineitem_order_line_id.e47413f270"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc036",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "description": "25% of raw.lineitem delivered twice",
+    "sql": [
+      "insert into raw.lineitem select * from raw.lineitem where (l_orderkey * 8 + l_linenumber * 7919) % 100 < 25"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_lineitem_order_line_id.e47413f270"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc037",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "description": "5% of raw.customer delivered twice",
+    "sql": [
+      "insert into raw.customer select * from raw.customer where (c_custkey * 7919) % 100 < 5"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_customers_customer_key.4b41940a28"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc038",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "description": "15% of raw.customer delivered twice",
+    "sql": [
+      "insert into raw.customer select * from raw.customer where (c_custkey * 7919) % 100 < 15"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_customers_customer_key.4b41940a28"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc039",
+    "kind": "duplicates",
+    "cause": "upstream_data",
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": "p_partkey",
+    "description": "10% of raw.part delivered twice",
+    "sql": [
+      "insert into raw.part select * from raw.part where (p_partkey * 7919) % 100 < 10"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_parts_part_key.11920b8fd8"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc040",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.fct_orders",
+    "root_column": "order_key",
+    "description": "order items grouped by line instead of order",
+    "sql": [],
+    "edit": {
+      "file": "models/marts/fct_orders.sql",
+      "old": "    group by order_key",
+      "new": "    group by order_key, line_number"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_fct_orders_order_key.f5e7a90273"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc041",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_key",
+    "description": "pending orders unioned in a second time",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nunion all\nselect o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, _loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderstatus = 'P'"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_orders_order_key.93561928ed"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc042",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.dim_customers",
+    "root_column": "customer_key",
+    "description": "region join compares a column to itself",
+    "sql": [],
+    "edit": {
+      "file": "models/marts/dim_customers.sql",
+      "old": "on n.region_key = r.region_key",
+      "new": "on n.region_key = n.region_key"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_dim_customers_customer_key.ad8156656e"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc043",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": "customer_key",
+    "description": "one segment unioned in a second time",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_customers.sql",
+      "old": "from {{ source('raw', 'customer') }}",
+      "new": "from {{ source('raw', 'customer') }}\nunion all\nselect c_custkey, c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal\nfrom {{ source('raw', 'customer') }}\nwhere c_mktsegment = 'BUILDING'"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_customers_customer_key.4b41940a28"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc044",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.fct_daily_revenue",
+    "root_column": "order_date",
+    "description": "daily revenue grouped by priority as well",
+    "sql": [],
+    "edit": {
+      "file": "models/marts/fct_daily_revenue.sql",
+      "old": "group by order_date, region_name",
+      "new": "group by order_date, region_name, priority"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_daily_revenue_one_row_per_region"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc045",
+    "kind": "duplicates",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": "order_line_id",
+    "description": "returned items unioned in a second time",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_lineitem.sql",
+      "old": "from {{ source('raw', 'lineitem') }}",
+      "new": "from {{ source('raw', 'lineitem') }}\nunion all\nselect l_orderkey || '-' || l_linenumber, l_orderkey, l_linenumber, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_shipdate, l_extendedprice * (1 - l_discount)\nfrom {{ source('raw', 'lineitem') }}\nwhere l_returnflag = 'R'"
+    },
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.unique_stg_lineitem_order_line_id.e47413f270"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc046",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 3 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 3 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 3 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc047",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 4 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 4 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 4 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc048",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 6 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 6 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 6 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc049",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 8 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 8 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 8 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc050",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 11 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 11 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 11 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc051",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 15 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 15 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 15 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc052",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 21 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 21 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 21 day"
+    ],
+    "edit": null,
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc053",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 30 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 30 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 30 day"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc054",
+    "kind": "late_data",
+    "cause": "upstream_data",
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "description": "the last 45 days of orders have not arrived",
+    "sql": [
+      "delete from raw.lineitem where l_orderkey in (select o_orderkey from raw.orders where o_orderdate > date '1998-08-02' - interval 45 day)",
+      "delete from raw.orders where o_orderdate > date '1998-08-02' - interval 45 day"
+    ],
+    "edit": null,
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh"
+    ],
+    "errored": [],
+    "breaks_something": true
+  },
+  {
+    "id": "inc055",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "hard-coded date cutoff left in",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere o_orderdate < date '1998-07-01'"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc056",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "load-time cutoff left in",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere _loaded_at < date '1998-06-15'"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc057",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "current year filtered out",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere year(o_orderdate) < 1998"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc058",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "open orders filtered out",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere o_orderstatus <> 'O'"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc059",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "thirty day lag buffer",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere o_orderdate < date '{{ var(\"as_of\") }}' - interval 30 day"
+    },
+    "split": "dev",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  },
+  {
+    "id": "inc060",
+    "kind": "late_data",
+    "cause": "code_change",
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "description": "trailing week excluded",
+    "sql": [],
+    "edit": {
+      "file": "models/staging/stg_orders.sql",
+      "old": "from {{ source('raw', 'orders') }}",
+      "new": "from {{ source('raw', 'orders') }}\nwhere o_orderdate < (select max(o_orderdate) from {{ source('raw', 'orders') }}) - interval 7 day"
+    },
+    "split": "holdout",
+    "failed": [
+      "test.tpch_warehouse.assert_orders_fresh",
+      "test.tpch_warehouse.relationships_stg_lineitem_order_key__order_key__ref_stg_orders_.ddf578f786"
+    ],
+    "errored": [],
+    "breaks_something": true,
+    "reference_fix": {
+      "builds_and_passes": true,
+      "checks_intact": true,
+      "tables_match": true,
+      "ok": true
+    }
+  }
+]
