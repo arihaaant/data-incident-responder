@@ -17,6 +17,10 @@ blocked_functions = {"read_csv", "read_csv_auto", "read_parquet", "read_json", "
                      "read_blob", "glob", "getenv", "parquet_scan", "csv_scan", "sniff_csv", "query_table",
                      "query"}
 allowed_roots = (exp.Select, exp.Union, exp.Intersect, exp.Except)
+# statement types that write or change things. looked up by name because they differ between sqlglot versions.
+blocked_nodes = tuple(getattr(exp, n) for n in ("Insert", "Update", "Delete", "Create", "Drop", "Alter", "Command",
+                                                 "Copy", "Attach", "Detach", "Set", "Pragma", "Merge", "Use")
+                      if hasattr(exp, n))
 allowed_schemas = {"raw", "staging", "marts", "information_schema"}
 
 
@@ -32,8 +36,7 @@ def check_sql(query):
     if not isinstance(stmt, allowed_roots):
         return f"only select queries are allowed, got {stmt.key}"
     for node in stmt.walk():
-        if isinstance(node, (exp.Insert, exp.Update, exp.Delete, exp.Create, exp.Drop, exp.Alter, exp.Command,
-                             exp.Copy, exp.Attach, exp.Set, exp.Pragma)):
+        if isinstance(node, blocked_nodes):
             return f"{node.key} is not allowed"
         if isinstance(node, exp.Func) and node.sql_name().lower() in blocked_functions:
             return f"{node.sql_name().lower()} is not allowed"
