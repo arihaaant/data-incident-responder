@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -57,7 +58,9 @@ def rules_baseline(work):
 
 
 async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
-    work = workspace.prepare(inc, root / "warehouse", kit / "source.duckdb", out_dir / "work" / inc.id)
+    # the working copy of the warehouse is scratch, keep it off the results folder (on colab that is drive)
+    scratch = Path(tempfile.gettempdir()) / "responder-work" / f"{out_dir.parent.name}-{out_dir.name}" / inc.id
+    work = workspace.prepare(inc, root / "warehouse", kit / "source.duckdb", scratch)
     workspace.build(work)
     t0 = time.time()
     if system == "rules":
