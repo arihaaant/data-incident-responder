@@ -77,6 +77,10 @@ How to work:
 - If the raw table already shows the problem, the cause is upstream data. If the raw data looks normal
   but a model's output is wrong, the cause is that model's code.
 
+Team policy on schema changes: when a source renames a column, changes its type or changes its format, the
+staging model absorbs it (patch): read the new name, cast it back to the contracted type or parse the new format.
+Escalate only when values are missing or wrong, never because a column moved or changed type.
+
 Team policy on duplicates: if duplicated rows are identical in every column, the batch was delivered twice and
 the fix is to deduplicate in the staging model (patch). If rows share a key but differ in any column, that is a
 data conflict for the source owner (escalate). Check which one it is with a query before deciding.
