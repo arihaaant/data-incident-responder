@@ -12,7 +12,7 @@ from pathlib import Path
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from . import workspace
-from .agents import build_graph
+from .agents import build_graph, build_single_agent
 from .incidents import catalog
 from .llm import make_llm, tracing_callbacks
 
@@ -32,19 +32,36 @@ def score(inc, outcome, fix_check):
     }
 
 
-async def run_one(inc, out_dir, llm, kit, golden):
+def rules_baseline(work):
+    # what dbt alone tells the on-call: the model behind the first alarm. no diagnosis, no fix, so escalate.
+    res = json.loads((work / "target" / "run_results.json").read_text())["results"]
+    manifest = json.loads((work / "target" / "manifest.json").read_text())
+    bad = next(r["unique_id"] for r in res if r["status"] in ("fail", "error"))
+    if bad.startswith("test."):
+        models = [n for n in manifest["nodes"][bad]["depends_on"]["nodes"] if n.startswith("model.")]
+        bad = models[0] if models else bad
+    return {"steps": [{"agent": "rules", "output": bad}], "outcome": {
+        "action": "escalate", "root_node": "model." + bad.split(".")[-1], "root_column": None,
+        "cause": "upstream_data", "patch": None, "escalated_after_failed_fix": False, "tokens": 0}}
+
+
+async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
     work = workspace.prepare(inc, root / "warehouse", kit / "source.duckdb", out_dir / "work" / inc.id)
     workspace.build(work)
-    client = MultiServerMCPClient({"warehouse": {
-        "command": sys.executable, "transport": "stdio",
-        "args": ["-m", "responder.mcp_server", "--project", str(work)]}})
-    tools = await client.get_tools()
-    graph = build_graph(llm, tools)
     t0 = time.time()
-    state = await graph.ainvoke({}, config={
-        "callbacks": tracing_callbacks(),
-        "metadata": {"langfuse_session_id": f"{out_dir.name}-{inc.id}", "langfuse_tags": [inc.kind, inc.split]},
-        "recursion_limit": 40})
+    if system == "rules":
+        state = rules_baseline(work)
+    else:
+        client = MultiServerMCPClient({"warehouse": {
+            "command": sys.executable, "transport": "stdio",
+            "args": ["-m", "responder.mcp_server", "--project", str(work)]}})
+        tools = await client.get_tools()
+        graph = build_graph(llm, tools) if system == "multi" else build_single_agent(llm, tools)
+        state = await graph.ainvoke({}, config={
+            "callbacks": tracing_callbacks(),
+            "metadata": {"langfuse_session_id": f"{out_dir.name}-{inc.id}",
+                         "langfuse_tags": [system, inc.kind, inc.split]},
+            "recursion_limit": 40})
     seconds = time.time() - t0
     outcome = state["outcome"]
 
@@ -68,13 +85,13 @@ async def main_async(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     kit = root / "kit"
     golden = json.loads((kit / "golden.json").read_text())
-    llm = make_llm(args.provider, args.model)
+    llm = None if args.system == "rules" else make_llm(args.provider, args.model)
     incs = [i for i in catalog() if (not args.ids or i.id in args.ids.split(","))
             and (not args.split or i.split == args.split)]
     for inc in incs:
         if (out_dir / f"{inc.id}.json").exists():
             continue  # resume: finished incidents are skipped
-        r = await run_one(inc, out_dir, llm, kit, golden)
+        r = await run_one(inc, out_dir, llm, kit, golden, args.system)
         s = r["score"]
         print(f"{inc.id} {inc.kind:12s} expected {inc.action:8s} got {r['outcome']['action']:8s} "
               f"root={'ok' if s['root_node_correct'] else 'x'} resolved={'ok' if s['resolved'] else 'x'} "
@@ -85,6 +102,7 @@ def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--ids", default=None)
     p.add_argument("--split", default=None, choices=["dev", "holdout"])
+    p.add_argument("--system", default="multi", choices=["multi", "single", "rules"])
     p.add_argument("--provider", default=None)
     p.add_argument("--model", default=None)
     p.add_argument("--out", default="runs/dev")
