@@ -14,7 +14,7 @@ providers = {
     # any openai-compatible endpoint works: groq, gemini, or vllm on colab
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY", "gemini-3.8-flash"),
-    "vllm": (os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"), "VLLM_API_KEY", "Qwen/Qwen2.5-32B-Instruct"),
+    "vllm": (os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1"), "VLLM_API_KEY", "openai/gpt-oss-120b"),
 }
 
 

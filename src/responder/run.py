@@ -19,11 +19,22 @@ from .llm import make_llm, tracing_callbacks
 root = Path(__file__).resolve().parents[2]
 
 
+def node_name(node):
+    # model.tpch_warehouse.stg_orders and model.stg_orders are the same model
+    parts = (node or "").lower().split(".")
+    if parts[0] == "model":
+        return "model." + parts[-1]
+    if parts[0] == "source":
+        return "source.raw." + parts[-1]
+    return ".".join(parts)
+
+
 def score(inc, outcome, fix_check):
-    root_ok = outcome.get("root_node") == inc.root_node
+    root_ok = node_name(outcome.get("root_node")) == node_name(inc.root_node)
+    columns = {c.lower() for c in [inc.root_column or "", *inc.also_accept]}
     return {
         "root_node_correct": root_ok,
-        "root_column_correct": root_ok and (outcome.get("root_column") or "").lower() == (inc.root_column or "").lower(),
+        "root_column_correct": root_ok and (outcome.get("root_column") or "").lower() in columns,
         "cause_correct": outcome.get("cause") == inc.cause,
         "action_correct": outcome.get("action") == inc.action,
         # a patch incident only counts as resolved if the agents' fix passes the hidden check
@@ -85,17 +96,25 @@ async def main_async(args):
     out_dir.mkdir(parents=True, exist_ok=True)
     kit = root / "kit"
     golden = json.loads((kit / "golden.json").read_text())
-    llm = None if args.system == "rules" else make_llm(args.provider, args.model)
+    llm = None if args.system == "rules" else make_llm(args.provider, args.model, args.temperature)
     incs = [i for i in catalog() if (not args.ids or i.id in args.ids.split(","))
-            and (not args.split or i.split == args.split)]
-    for inc in incs:
-        if (out_dir / f"{inc.id}.json").exists():
-            continue  # resume: finished incidents are skipped
-        r = await run_one(inc, out_dir, llm, kit, golden, args.system)
+            and (not args.split or i.split == args.split)
+            and not (out_dir / f"{i.id}.json").exists()]  # resume: finished incidents are skipped
+    gate = asyncio.Semaphore(args.workers)
+
+    async def one(inc):
+        async with gate:
+            try:
+                r = await run_one(inc, out_dir, llm, kit, golden, args.system)
+            except Exception as e:  # one broken incident shouldn't stop the batch, it gets rerun next time
+                print(f"{inc.id} failed to run: {type(e).__name__}: {str(e)[:200]}")
+                return
         s = r["score"]
         print(f"{inc.id} {inc.kind:12s} expected {inc.action:8s} got {r['outcome']['action']:8s} "
               f"root={'ok' if s['root_node_correct'] else 'x'} resolved={'ok' if s['resolved'] else 'x'} "
-              f"tokens={r['outcome']['tokens']} {r['seconds']}s")
+              f"tokens={r['outcome']['tokens']} {r['seconds']}s", flush=True)
+
+    await asyncio.gather(*(one(i) for i in incs))
 
 
 def main(argv=None):
@@ -105,6 +124,8 @@ def main(argv=None):
     p.add_argument("--system", default="multi", choices=["multi", "single", "rules"])
     p.add_argument("--provider", default=None)
     p.add_argument("--model", default=None)
+    p.add_argument("--temperature", type=float, default=0)
+    p.add_argument("--workers", type=int, default=1)
     p.add_argument("--out", default="runs/dev")
     asyncio.run(main_async(p.parse_args(argv)))
 
