@@ -36,7 +36,6 @@ def pick(key, pct):
 
 renames = [
     ("orders", "o_orderpriority", "o_order_priority"),
-    ("orders", "o_totalprice", "o_total_price"),
     ("orders", "o_custkey", "o_customer_key"),
     ("orders", "o_orderdate", "o_order_date"),
     ("customer", "c_mktsegment", "c_market_segment"),
@@ -54,6 +53,7 @@ retypes = [  # table, column, how it now arrives (alter ... using), what it look
     ("lineitem", "l_extendedprice", "l_extendedprice::varchar", "text", "cast({c} as decimal(15,2))"),
     ("orders", "o_orderdate", "strftime(o_orderdate, '%m/%d/%Y')", "MM/DD/YYYY text",
      "strptime({c}, '%m/%d/%Y')::date"),
+    ("customer", "c_acctbal", "c_acctbal::varchar", "text", "cast({c} as decimal(15,2))"),
 ]
 
 # null spikes from upstream: values missing in the source. downstream can't invent them, so escalate.
@@ -166,14 +166,23 @@ def catalog():
         n += 1
         out.append(Incident(id=f"inc{n:03d}", **kw))
 
-    for t, old, new in renames:
+    def rename(t, old, new):
         add(kind="schema_drift", cause="upstream_data", action="patch", root_node=f"source.raw.{t}", root_column=old,
             description=f"raw.{t}.{old} renamed to {new}; {staging_for[t]} has to follow",
             sql=[f"alter table raw.{t} rename column {old} to {new}"])
-    for t, col, using, looks, _ in retypes:
+
+    def retype(t, col, using, looks):
         add(kind="schema_drift", cause="upstream_data", action="patch", root_node=f"source.raw.{t}", root_column=col,
             description=f"raw.{t}.{col} now arrives as {looks}; {staging_for[t]} has to read it back",
             sql=[f"alter table raw.{t} alter column {col} type varchar using {using}"])
+
+    # ordered so the held-out set gets two renames and one type change
+    for r in renames[:-2]:
+        rename(*r)
+    for t, col, using, looks, _ in retypes:
+        retype(t, col, using, looks)
+    for r in renames[-2:]:
+        rename(*r)
 
     for t, col, key, pct in upstream_nulls:
         add(kind="null_spike", cause="upstream_data", action="escalate", root_node=f"source.raw.{t}", root_column=col,
