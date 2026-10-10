@@ -16,6 +16,7 @@ dependencies = [
     "langgraph>=1.0",
     "langchain>=1.0",
     "langchain-openai>=1.0",
+    "langchain-google-genai>=4.0",
     "langchain-mcp-adapters>=0.3",
     "langfuse>=3.0",
     "python-dotenv>=1.0",
