@@ -12,6 +12,11 @@ models:
               arguments:
                 values: [AFRICA, AMERICA, ASIA, EUROPE, MIDDLE EAST]
 
+  - name: fct_order_items
+    columns:
+      - name: order_line_id
+        data_tests: [unique, not_null]
+
   - name: fct_orders
     columns:
       - name: order_key

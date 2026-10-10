@@ -50,7 +50,9 @@ models:
     config:
       contract: {enforced: true}
     columns:
-      - {name: part_key, data_type: bigint}
+      - name: part_key
+        data_type: bigint
+        data_tests: [unique, not_null]
       - {name: part_name, data_type: varchar}
       - {name: brand, data_type: varchar}
       - {name: part_type, data_type: varchar}
