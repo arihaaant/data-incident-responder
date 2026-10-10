@@ -58,3 +58,18 @@ def test_tool_names_are_cleaned():
     assert clean_name("cfunctions.Resolution") == "Resolution"
     assert clean_name("functions.run_sql") == "run_sql"
     assert clean_name("run_sql") == "run_sql"
+
+
+def test_provider_parse_errors_are_retried():
+    from responder.agents import call_model
+
+    class Rejects:
+        calls = 0
+
+        async def ainvoke(self, messages):
+            Rejects.calls += 1
+            if Rejects.calls < 3:
+                raise RuntimeError("Error code: 400 - {'error': {'code': 'tool_use_failed', 'message': 'Parsing failed'}}")
+            return "ok"
+
+    assert asyncio.run(call_model(Rejects(), [])) == "ok" and Rejects.calls == 3
