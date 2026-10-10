@@ -84,3 +84,20 @@ def test_model_sql_and_schema(ws):
     # the failed check stops dbt from building most marts, so only check that the filter keeps to one schema
     marts = ws.list_tables("marts")
     assert marts and all(t.startswith("marts.") for t in marts)
+
+
+def test_unknown_lineage_names_list_the_real_ones(ws):
+    res = ws.get_lineage("raw.customers")
+    assert "error" in res and "raw.customer" in res["known"] and "stg_customers" in res["known"]
+
+
+def test_try_patch_builds_a_copy_and_reports_problems(ws):
+    original = ws.get_model_sql("stg_customers")["sql"]
+    assert "error" in ws.try_patch("models/staging/schema.yml", "x")
+    broken = original.replace("c_acctbal as account_balance", "cast(c_acctbal as varchar) as account_balance")
+    res = ws.try_patch("models/staging/stg_customers.sql", broken)
+    assert not res["passes"]
+    assert any("contract" in p["message"].lower() for p in res["problems"])
+    # the incident (nulls arriving from upstream) can't be patched away, so the unchanged file still fails
+    assert not ws.try_patch("models/staging/stg_customers.sql", original)["passes"]
+    assert ws.get_model_sql("stg_customers")["sql"] == original
