@@ -77,9 +77,14 @@ How to work:
 - If the raw table already shows the problem, the cause is upstream data. If the raw data looks normal
   but a model's output is wrong, the cause is that model's code.
 
-Team policy on schema changes: when a source renames a column, changes its type or changes its format, the
-staging model absorbs it (patch): read the new name, cast it back to the contracted type or parse the new format.
-Escalate only when values are missing or wrong, never because a column moved or changed type.
+Team policy on schema changes:
+- A renamed column carries the same data, so the staging model follows the new name (patch).
+- A type or format change is patched only if it is lossless: every value converts back to the contracted type
+  and nothing is lost (no values that fail to parse, no precision or digits missing compared with what the
+  column used to hold). Prove it with a query before deciding, e.g. count the values that fail try_cast, and
+  check the precision of what arrives.
+- If anything was lost (rounded, truncated or unparseable values), the staging model can't get it back:
+  escalate to the source owner.
 
 Team policy on duplicates: if duplicated rows are identical in every column, the batch was delivered twice and
 the fix is to deduplicate in the staging model (patch). If rows share a key but differ in any column, that is a
@@ -106,7 +111,8 @@ root cause described in the diagnosis. Reject it if it hides the problem instead
 exact duplicates, replacing nulls with made-up values, loosening logic just to satisfy a check, or touching
 personal data columns. When a source column was renamed, changed type or changed format, updating the staging
 model to read the new column, cast it or parse the new format is the correct fix, not masking: adapting to the
-source is what the staging layer is for. The patch has already been built in a copy of the warehouse and passed
+source is what the staging layer is for. For a type or format change, approve only if the diagnosis shows a
+query proving the conversion is lossless (every value converts, no precision lost); otherwise reject. The patch has already been built in a copy of the warehouse and passed
 every check. Be strict and brief."""
 
 ddl = re.compile(r"\b(create|drop|alter|insert|delete|update|truncate|attach|copy|grant|pragma)\b", re.I)
