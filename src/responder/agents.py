@@ -6,6 +6,7 @@ whether the fix repairs the cause or just hides it.
 """
 import json
 import re
+from pathlib import Path
 from typing import Literal, Optional, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field, ValidationError
 max_tool_output = 2500
 max_investigate_steps = 10
 max_fix_attempts = 2
+max_dry_runs = 3
 token_budget = 80_000
 
 
@@ -91,13 +93,17 @@ Be efficient: you have at most {steps} tool calls."""
 
 fix_prompt = """You fix a data incident by rewriting one dbt model file. Keep everything else in the file the same.
 Rules: do not edit checks, tests or yml files; do not filter out rows or fill in values to make a check pass,
-unless the rows are exact duplicates of a redelivered batch; keep column names and types the same as before
-(the staging models have enforced column type contracts)."""
+unless the rows are exact duplicates of a redelivered batch; keep column names and types exactly as before
+(the staging models have enforced column type contracts, e.g. decimal(15,2) has to stay decimal(15,2)).
+Your patch is built in a copy of the warehouse before anyone reviews it; if that build fails you will see why."""
 
 review_prompt = """You review a proposed fix to a dbt model before it is applied. Approve it only if it repairs the
 root cause described in the diagnosis. Reject it if it hides the problem instead: dropping rows that are not
 exact duplicates, replacing nulls with made-up values, loosening logic just to satisfy a check, or touching
-personal data columns. Be strict and brief."""
+personal data columns. When a source column was renamed, changed type or changed format, updating the staging
+model to read the new column, cast it or parse the new format is the correct fix, not masking: adapting to the
+source is what the staging layer is for. The patch has already been built in a copy of the warehouse and passed
+every check. Be strict and brief."""
 
 ddl = re.compile(r"\b(create|drop|alter|insert|delete|update|truncate|attach|copy|grant|pragma)\b", re.I)
 pii = re.compile(r"\b(c_address|c_phone|address|phone)\b", re.I)
@@ -119,11 +125,25 @@ def policy_check(patch, original):
     return problems
 
 
+provider_parse_errors = ("tool_use_failed", "Parsing failed", "tool call validation", "failed_generation")
+
+
+async def call_model(runnable, messages, tries=3):
+    """Some providers reject a malformed generation themselves (a 400) before we see it; those are retried."""
+    for attempt in range(tries):
+        try:
+            return await runnable.ainvoke(messages)
+        except Exception as e:
+            if attempt == tries - 1 or not any(m in str(e) for m in provider_parse_errors):
+                raise
+
+
 async def ask_structured(llm, schema, messages, tries=3):
     messages = list(messages)
     tokens = 0
     for _ in range(tries):
-        out = await llm.with_structured_output(schema, method="function_calling", include_raw=True).ainvoke(messages)
+        out = await call_model(llm.with_structured_output(schema, method="function_calling", include_raw=True),
+                               messages)
         tokens += usage(out["raw"])
         if out["parsed"] is not None:
             return out["parsed"], tokens
@@ -138,6 +158,22 @@ def parse_call(schema, call):
         return schema(**call["args"]), None
     except ValidationError as e:
         return None, "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()[:5])
+
+
+async def unknown_node(by_name, root_node):
+    """None if the diagnosis names a real model or source, otherwise a message listing the real ones."""
+    kind, _, rest = (root_node or "").partition(".")
+    if kind == "source":
+        name = "raw." + rest.split(".")[-1]
+    elif kind == "model":
+        name = rest.split(".")[-1]
+    else:
+        return f"root_node has to look like source.raw.<table> or model.<name>, not {root_node}"
+    lineage = json.loads(tool_text(await by_name["get_lineage"].ainvoke({"name": name})))
+    if "error" not in lineage:
+        return None
+    return (f"{root_node} does not exist in this project. Sources are source.raw.<table>, models are "
+            f"model.<name>, using one of: {', '.join(lineage.get('known', []))}")
 
 
 def clean_name(name):
@@ -186,7 +222,7 @@ def build_graph(llm, tools):
         for _ in range(max_investigate_steps):
             if tokens > token_budget:
                 break
-            reply = await bound.ainvoke(messages)
+            reply = await call_model(bound, messages)
             tokens += usage(reply)
             messages.append(reply)
             if not reply.tool_calls:
@@ -198,6 +234,9 @@ def build_graph(llm, tools):
                 call = call | {"name": clean_name(call["name"])}
                 if call["name"] == "Diagnosis":
                     diagnosis, problem = parse_call(Diagnosis, call)
+                    if not problem:
+                        problem = await unknown_node(by_name, diagnosis.root_node)
+                        diagnosis = None if problem else diagnosis
                     if problem:
                         messages.append(ToolMessage(f"Diagnosis rejected, fix and resend: {problem}",
                                                     tool_call_id=call["id"]))
@@ -230,18 +269,35 @@ def build_graph(llm, tools):
             lin = json.loads(tool_text(await by_name["get_lineage"].ainvoke({"name": "raw." + target})))
             target = next((n for n in lin.get("downstream", []) if n.startswith("stg_")), target)
         current = json.loads(tool_text(await by_name["get_model_sql"].ainvoke({"name": target})))
-        prompt = (f"Diagnosis:\n{json.dumps(d)}\n\nFile {current.get('path')}:\n{current.get('sql')}\n\n"
-                  f"Failing checks:\n{state['alarms']}")
-        if state.get("feedback"):
-            prompt += f"\n\nYour previous attempt was rejected: {state['feedback']}"
-        p, n = await structured(Patch, [SystemMessage(fix_prompt), HumanMessage(prompt)])
-        patch = p.model_dump() | {"original": current.get("sql")}
-        return {"patch": patch, "attempts": state.get("attempts", 0) + 1, "tokens": state["tokens"] + n,
-                "steps": state["steps"] + [{"agent": "fix", "output": {k: patch[k] for k in ("file", "explanation")}}]}
+        base = (f"Diagnosis:\n{json.dumps(d)}\n\nFile {current.get('path')}:\n{current.get('sql')}\n\n"
+                f"Failing checks:\n{state['alarms']}")
+        feedback, tokens, steps = state.get("feedback"), state["tokens"], list(state["steps"])
+        # write a patch, build it in a throwaway copy, and try again with the errors if it doesn't pass
+        for _ in range(max_dry_runs):
+            prompt = base + (f"\n\nYour previous attempt did not work: {feedback}" if feedback else "")
+            p, n = await structured(Patch, [SystemMessage(fix_prompt), HumanMessage(prompt)])
+            tokens += n
+            dry = json.loads(tool_text(await by_name["try_patch"].ainvoke({"file": p.file, "sql": p.sql})))
+            steps.append({"agent": "fix", "output": {"file": p.file, "explanation": p.explanation,
+                                                     "dry_run_passes": dry.get("passes", False)}})
+            if dry.get("passes"):
+                break
+            feedback = "it was built in a copy of the warehouse and failed: " + short(json.dumps(dry))
+        patch = p.model_dump() | {"dry_run": dry}
+        return {"patch": patch, "attempts": state.get("attempts", 0) + 1, "tokens": tokens, "steps": steps}
 
     async def review(state):
         p = state["patch"]
-        problems = policy_check(p, p.get("original"))
+        # compare against the file this patch actually replaces, not the one the diagnosis pointed at
+        stem = Path(p["file"].replace("\\", "/")).stem
+        current = json.loads(tool_text(await by_name["get_model_sql"].ainvoke({"name": stem})))
+        same_file = current.get("path") == p["file"].replace("\\", "/")
+        p["original"] = current.get("sql") if same_file else None
+        problems = policy_check(p, p["original"])
+        if not same_file:
+            problems.append(f"{p['file']} is not an existing model file")
+        if not p.get("dry_run", {}).get("passes"):
+            problems.append("the patch does not pass the build: " + short(json.dumps(p.get("dry_run")))[:600])
         if problems:
             r, n = Review(approved=False, reasons="; ".join(problems)), 0
         else:
@@ -295,9 +351,11 @@ class Resolution(BaseModel):
 
 def build_single_agent(llm, tools):
     by_name = {t.name: t for t in tools}
-    usable = [by_name[n] for n in ("get_test_results", "run_sql", "get_lineage", "get_model_sql", "list_tables")]
+    usable = [by_name[n] for n in ("get_test_results", "run_sql", "get_lineage", "get_model_sql", "list_tables",
+                                    "try_patch")]
     bound = llm.bind_tools(usable + [Resolution])
-    prompt = investigate_prompt.format(steps=max_investigate_steps + 2) + "\n\nIf you patch: " + fix_prompt
+    prompt = (investigate_prompt.format(steps=max_investigate_steps + 2) + "\n\nIf you patch: " + fix_prompt +
+              " Use try_patch to build your patch in a throwaway copy before you submit it.")
 
     async def solve(state):
         messages = [SystemMessage(prompt), HumanMessage(
@@ -307,7 +365,7 @@ def build_single_agent(llm, tools):
         for _ in range(max_investigate_steps + 2):
             if tokens > token_budget:
                 break
-            reply = await bound.ainvoke(messages)
+            reply = await call_model(bound, messages)
             tokens += usage(reply)
             messages.append(reply)
             if not reply.tool_calls:
@@ -317,6 +375,9 @@ def build_single_agent(llm, tools):
                 call = call | {"name": clean_name(call["name"])}
                 if call["name"] == "Resolution":
                     res, problem = parse_call(Resolution, call)
+                    if not problem:
+                        problem = await unknown_node(by_name, res.root_node)
+                        res = None if problem else res
                     if problem:
                         messages.append(ToolMessage(f"Resolution rejected, fix and resend: {problem}",
                                                     tool_call_id=call["id"]))
