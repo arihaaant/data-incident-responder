@@ -14,7 +14,7 @@ from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field, ValidationError
 
 max_tool_output = 2500
-max_investigate_steps = 10
+max_investigate_steps = 14
 max_fix_attempts = 2
 max_dry_runs = 3
 token_budget = 80_000
