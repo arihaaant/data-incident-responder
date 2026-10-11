@@ -81,8 +81,8 @@ Team policy on schema changes:
 - A renamed column carries the same data, so the staging model follows the new name (patch).
 - A type or format change is patched only if it is lossless: every value converts back to the contracted type
   and nothing is lost (no values that fail to parse, no precision or digits missing compared with what the
-  column used to hold). Check it with profile_column(table, column, contracted type); the contracted type is in
-  the contract error. Patch only if the profile says lossless, and use the conversion it gives.
+  column used to hold). Check it with profile_column(table, column), which reads the contracted type from the
+  staging contract. Patch only if the profile says lossless, and use the conversion it gives.
 - If anything was lost (rounded, truncated or unparseable values), the staging model can't get it back:
   escalate to the source owner.
 

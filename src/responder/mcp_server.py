@@ -43,10 +43,11 @@ def make_server(project):
         return json.dumps(ws.get_model_sql(name))
 
     @mcp.tool()
-    def profile_column(table: str, column: str, target_type: str) -> str:
+    def profile_column(table: str, column: str, target_type: str = "") -> str:
         """Check whether a raw column converts to the type its staging contract expects (e.g. lineitem,
-        l_discount, decimal(15,2)) without losing anything: values that fail to convert, values a conversion would
-        round, decimal places the source no longer sends, and for text dates the format that parses them."""
+        l_discount) without losing anything: values that fail to convert, values a conversion would round,
+        decimal places the source no longer sends, and for text dates the format that parses them. The type is
+        read from the staging contract; target_type is only used for a column no contract covers."""
         return json.dumps(ws.profile_column(table, column, target_type), default=str)
 
     @mcp.tool()

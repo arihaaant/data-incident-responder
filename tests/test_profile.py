@@ -1,3 +1,4 @@
+import json
 import shutil
 
 import duckdb
@@ -65,6 +66,22 @@ def test_extra_digits_would_be_rounded(raw_db, tmp_path):
     con.close()
     p = ws.profile_column("lineitem", "l_discount", "decimal(15,2)")
     assert not p["lossless"] and p["values_changed_by_conversion"] > 0
+
+
+def test_contract_type_wins_over_a_guess(raw_db, tmp_path):
+    ws = workspace_with(raw_db, tmp_path, "inc011")
+    (tmp_path / "target").mkdir()
+    (tmp_path / "target" / "manifest.json").write_text(json.dumps({"sources": {}, "nodes": {"model.p.stg_lineitem": {
+        "resource_type": "model", "name": "stg_lineitem", "contract": {"enforced": True},
+        "depends_on": {"nodes": ["source.p.raw.lineitem"]},
+        "raw_code": "select\n    l_extendedprice as extended_price\nfrom {{ source('raw', 'lineitem') }}",
+        "columns": {"extended_price": {"data_type": "decimal(15,2)"}}}}}))
+    p = ws.profile_column("lineitem", "l_extendedprice", "decimal(16,2)")
+    assert p["target_type"] == "decimal(15,2)" and p["lossless"], p
+    assert p["conversion"] == "cast(l_extendedprice as decimal(15,2))"
+    assert p["contract"] == "stg_lineitem.extended_price is contracted as decimal(15,2)"
+    # no target needed when the contract has the column
+    assert ws.profile_column("lineitem", "l_extendedprice")["target_type"] == "decimal(15,2)"
 
 
 def test_bad_arguments_are_refused(raw_db, tmp_path):

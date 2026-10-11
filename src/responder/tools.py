@@ -129,12 +129,28 @@ class Workspace:
             return {"error": f"no model called {name}"}
         return {"path": str(hits[0].relative_to(self.project)).replace("\\", "/"), "sql": hits[0].read_text()}
 
-    def profile_column(self, table, column, target_type):
+    def contract_type(self, table, column):
+        """The type an enforced staging contract expects for a raw column the model passes straight through."""
+        m = self._manifest()
+        for node in (m or {}).get("nodes", {}).values():
+            if node.get("resource_type") != "model" or not node.get("contract", {}).get("enforced"):
+                continue
+            if not any(d.endswith(f".raw.{table}") for d in node.get("depends_on", {}).get("nodes", [])):
+                continue
+            alias = re.search(rf"\b{column}\s+as\s+([a-z_]+)", node.get("raw_code", ""), re.I)
+            spec = node.get("columns", {}).get(alias.group(1).lower(), {}) if alias else {}
+            if spec.get("data_type"):
+                return f"{node['name']}.{alias.group(1).lower()}", spec["data_type"].strip().lower()
+        return None
+
+    def profile_column(self, table, column, target_type=""):
         """Whether a raw column converts to the type its staging contract expects without losing anything."""
         table = table.split(".")[-1]
-        target = target_type.strip().lower()
         if not re.fullmatch(r"[a-z_]+", table) or not re.fullmatch(r"[a-z_]+", column):
             return {"error": "table and column must be plain names, e.g. lineitem and l_discount"}
+        # the contract is the authority on the type; a guessed target would prove the wrong conversion
+        contract = self.contract_type(table, column)
+        target = contract[1] if contract else (target_type or "").strip().lower()
         if not re.fullmatch(r"decimal\(\d{1,2},\d{1,2}\)|integer|bigint|double|date|timestamp|varchar", target):
             return {"error": "target_type must be one of decimal(p,s), integer, bigint, double, date, timestamp, varchar"}
         con = duckdb.connect(str(self.db), read_only=True)
@@ -148,6 +164,8 @@ class Workspace:
             total, nulls = con.execute(f"select count(*), count(*) - count({col}) from {src}").fetchone()
             out = {"column": f"raw.{table}.{column}", "current_type": current, "target_type": target,
                    "rows": total, "nulls": nulls}
+            if contract:
+                out["contract"] = f"{contract[0]} is contracted as {contract[1]}"
             issues = []
             text = current == "varchar"
 
