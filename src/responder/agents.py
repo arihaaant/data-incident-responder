@@ -81,8 +81,8 @@ Team policy on schema changes:
 - A renamed column carries the same data, so the staging model follows the new name (patch).
 - A type or format change is patched only if it is lossless: every value converts back to the contracted type
   and nothing is lost (no values that fail to parse, no precision or digits missing compared with what the
-  column used to hold). Prove it with a query before deciding, e.g. count the values that fail try_cast, and
-  check the precision of what arrives.
+  column used to hold). Check it with profile_column(table, column, contracted type); the contracted type is in
+  the contract error. Patch only if the profile says lossless, and use the conversion it gives.
 - If anything was lost (rounded, truncated or unparseable values), the staging model can't get it back:
   escalate to the source owner.
 
@@ -104,6 +104,7 @@ fix_prompt = """You fix a data incident by rewriting one dbt model file. Keep ev
 Rules: do not edit checks, tests or yml files; do not filter out rows or fill in values to make a check pass,
 unless the rows are exact duplicates of a redelivered batch; keep column names and types exactly as before
 (the staging models have enforced column type contracts, e.g. decimal(15,2) has to stay decimal(15,2)).
+For a source type or format change, use the conversion from the column profile below.
 Your patch is built in a copy of the warehouse before anyone reviews it; if that build fails you will see why."""
 
 review_prompt = """You review a proposed fix to a dbt model before it is applied. Approve it only if it repairs the
@@ -111,9 +112,9 @@ root cause described in the diagnosis. Reject it if it hides the problem instead
 exact duplicates, replacing nulls with made-up values, loosening logic just to satisfy a check, or touching
 personal data columns. When a source column was renamed, changed type or changed format, updating the staging
 model to read the new column, cast it or parse the new format is the correct fix, not masking: adapting to the
-source is what the staging layer is for. For a type or format change, approve only if the diagnosis shows a
-query proving the conversion is lossless (every value converts, no precision lost); otherwise reject. The patch has already been built in a copy of the warehouse and passed
-every check. Be strict and brief."""
+source is what the staging layer is for. For a type or format change, approve only if a column profile below
+says the conversion is lossless and the patch uses that conversion; if no profile was run or it lists issues,
+reject. The patch has already been built in a copy of the warehouse and passed every check. Be strict and brief."""
 
 ddl = re.compile(r"\b(create|drop|alter|insert|delete|update|truncate|attach|copy|grant|pragma)\b", re.I)
 pii = re.compile(r"\b(c_address|c_phone|address|phone)\b", re.I)
@@ -192,6 +193,13 @@ async def unknown_node(by_name, root_node):
             f"model.<name>, using one of: {', '.join(lineage.get('known', []))}")
 
 
+def column_profiles(steps):
+    found = [s["result"] for s in steps if s.get("tool") == "profile_column"]
+    if not found:
+        return "Column profiles: none were run during the investigation."
+    return "Column profiles from the investigation:\n" + "\n".join(found)
+
+
 def clean_name(name):
     # gpt-oss sometimes leaks its channel prefix into the tool name, e.g. "functions.run_sql"
     return name.split(".")[-1].strip()
@@ -216,7 +224,8 @@ def tool_text(result):
 
 def build_graph(llm, tools):
     by_name = {t.name: t for t in tools}
-    investigate_tools = [by_name[n] for n in ("run_sql", "get_lineage", "get_model_sql", "list_tables")]
+    investigate_tools = [by_name[n] for n in ("run_sql", "get_lineage", "get_model_sql", "list_tables",
+                                              "profile_column")]
 
     async def structured(schema, messages):
         return await ask_structured(llm, schema, messages)
@@ -262,7 +271,8 @@ def build_graph(llm, tools):
                     messages.append(ToolMessage(f"unknown tool {call['name']}", tool_call_id=call["id"]))
                     continue
                 out = short(tool_text(await by_name[call["name"]].ainvoke(call["args"])))
-                steps.append({"agent": "investigate", "tool": call["name"], "args": call["args"], "result": out[:500]})
+                steps.append({"agent": "investigate", "tool": call["name"], "args": call["args"],
+                              "result": out if call["name"] == "profile_column" else out[:500]})
                 notes.append(f"{call['name']}({json.dumps(call['args'])}) ->\n{out[:1200]}")
                 messages.append(ToolMessage(out, tool_call_id=call["id"]))
             if diagnosis:
@@ -289,7 +299,7 @@ def build_graph(llm, tools):
             target = next((n for n in lin.get("downstream", []) if n.startswith("stg_")), target)
         current = json.loads(tool_text(await by_name["get_model_sql"].ainvoke({"name": target})))
         base = (f"Diagnosis:\n{json.dumps(d)}\n\nFile {current.get('path')}:\n{current.get('sql')}\n\n"
-                f"Failing checks:\n{state['alarms']}")
+                f"Failing checks:\n{state['alarms']}\n\n{column_profiles(state['steps'])}")
         feedback, tokens, steps = state.get("feedback"), state["tokens"], list(state["steps"])
         # write a patch, build it in a throwaway copy, and try again with the errors if it doesn't pass
         for _ in range(max_dry_runs):
@@ -322,7 +332,8 @@ def build_graph(llm, tools):
         else:
             r, n = await structured(Review, [SystemMessage(review_prompt), HumanMessage(
                 f"Diagnosis:\n{json.dumps(state['diagnosis'])}\n\nOriginal file:\n{p['original']}\n\n"
-                f"Proposed file ({p['file']}):\n{p['sql']}\n\nExplanation: {p['explanation']}")])
+                f"Proposed file ({p['file']}):\n{p['sql']}\n\nExplanation: {p['explanation']}\n\n"
+                f"{column_profiles(state['steps'])}")])
         return {"review": r.model_dump(), "feedback": r.reasons if not r.approved else "",
                 "tokens": state["tokens"] + n, "steps": state["steps"] + [{"agent": "review", "output": r.model_dump()}]}
 
@@ -371,7 +382,7 @@ class Resolution(BaseModel):
 def build_single_agent(llm, tools):
     by_name = {t.name: t for t in tools}
     usable = [by_name[n] for n in ("get_test_results", "run_sql", "get_lineage", "get_model_sql", "list_tables",
-                                    "try_patch")]
+                                    "profile_column", "try_patch")]
     bound = llm.bind_tools(usable + [Resolution])
     prompt = (investigate_prompt.format(steps=max_investigate_steps + 2) + "\n\nIf you patch: " + fix_prompt +
               " Use try_patch to build your patch in a throwaway copy before you submit it.")
@@ -406,7 +417,8 @@ def build_single_agent(llm, tools):
                     messages.append(ToolMessage(f"unknown tool {call['name']}", tool_call_id=call["id"]))
                     continue
                 out = short(tool_text(await by_name[call["name"]].ainvoke(call["args"])))
-                steps.append({"agent": "single", "tool": call["name"], "args": call["args"], "result": out[:500]})
+                steps.append({"agent": "single", "tool": call["name"], "args": call["args"],
+                              "result": out if call["name"] == "profile_column" else out[:500]})
                 notes.append(f"{call['name']}({json.dumps(call['args'])}) ->\n{out[:1200]}")
                 messages.append(ToolMessage(out, tool_call_id=call["id"]))
             if res:

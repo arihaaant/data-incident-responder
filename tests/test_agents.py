@@ -81,3 +81,11 @@ def test_no_conclusion_means_escalate():
     for schema in (Diagnosis, Resolution):
         d = undecided(schema)
         assert d.action == "escalate" and d.root_node == "unknown"
+
+
+def test_column_profiles_reach_fixer_and_reviewer():
+    from responder.agents import column_profiles
+
+    assert "none were run" in column_profiles([])
+    steps = [{"tool": "profile_column", "result": '{"lossless": true}'}, {"tool": "run_sql", "result": "x"}]
+    assert column_profiles(steps).endswith('{"lossless": true}')
