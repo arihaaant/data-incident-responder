@@ -177,6 +177,39 @@ def parse_call(schema, call):
         return None, "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()[:5])
 
 
+def canonical(root_node):
+    """source.raw.<table> or model.<name>, however the model wrote it (raw.orders, model.project.stg_orders)."""
+    parts = (root_node or "").strip().lower().split(".")
+    if len(parts) > 1 and (parts[0] == "source" or (parts[0] == "raw" and len(parts) == 2)):
+        return "source.raw." + parts[-1]
+    if len(parts) > 1 and (parts[0] == "model" or (parts[0] in ("staging", "marts") and len(parts) == 2)):
+        return "model." + parts[-1]
+    return root_node
+
+
+def incomplete(resolution):
+    if resolution.action == "patch" and not (resolution.file and resolution.sql):
+        return "a patch needs file and sql: the model file's path and its complete new contents"
+    return None
+
+
+async def conclude(llm, by_name, schema, messages):
+    """The conclusion once the tool budget is spent, held to the same check as one submitted during the run."""
+    messages, tokens = list(messages), 0
+    for _ in range(2):
+        try:
+            out, n = await ask_structured(llm, schema, messages)
+        except RuntimeError:
+            break
+        tokens += n
+        out.root_node = canonical(out.root_node)
+        problem = await unknown_node(by_name, out.root_node)
+        if not problem:
+            return out, tokens
+        messages.append(HumanMessage(f"That {schema.__name__} was rejected: {problem}. Give it again."))
+    return undecided(schema), tokens
+
+
 async def unknown_node(by_name, root_node):
     """None if the diagnosis names a real model or source, otherwise a message listing the real ones."""
     kind, _, rest = (root_node or "").partition(".")
@@ -260,6 +293,7 @@ def build_graph(llm, tools):
                 if call["name"] == "Diagnosis":
                     diagnosis, problem = parse_call(Diagnosis, call)
                     if not problem:
+                        diagnosis.root_node = canonical(diagnosis.root_node)
                         problem = await unknown_node(by_name, diagnosis.root_node)
                         diagnosis = None if problem else diagnosis
                     if problem:
@@ -279,14 +313,11 @@ def build_graph(llm, tools):
                 break
         if diagnosis is None:
             # out of steps: hand the findings over as plain notes, with no tool history to continue from
-            try:
-                d, n = await structured(Diagnosis, [
-                    SystemMessage(investigate_prompt.format(steps=0)),
-                    HumanMessage(intro + "\n\nWhat the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
-                                 "\n\nGive your diagnosis now.")])
-                diagnosis, tokens = d, tokens + n
-            except RuntimeError:
-                diagnosis = undecided(Diagnosis)
+            diagnosis, n = await conclude(llm, by_name, Diagnosis, [
+                SystemMessage(investigate_prompt.format(steps=0)),
+                HumanMessage(intro + "\n\nWhat the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                             "\n\nGive your diagnosis now.")])
+            tokens += n
         steps.append({"agent": "investigate", "output": diagnosis.model_dump()})
         return {"diagnosis": diagnosis.model_dump(), "tokens": tokens, "steps": steps}
 
@@ -406,7 +437,8 @@ def build_single_agent(llm, tools):
                 if call["name"] == "Resolution":
                     res, problem = parse_call(Resolution, call)
                     if not problem:
-                        problem = await unknown_node(by_name, res.root_node)
+                        res.root_node = canonical(res.root_node)
+                        problem = await unknown_node(by_name, res.root_node) or incomplete(res)
                         res = None if problem else res
                     if problem:
                         messages.append(ToolMessage(f"Resolution rejected, fix and resend: {problem}",
@@ -424,13 +456,10 @@ def build_single_agent(llm, tools):
             if res:
                 break
         if res is None:
-            try:
-                res, n = await ask_structured(llm, Resolution, [
-                    SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
-                                                        "\n\nGive your resolution now.")])
-                tokens += n
-            except RuntimeError:
-                res = undecided(Resolution)
+            res, n = await conclude(llm, by_name, Resolution, [
+                SystemMessage(prompt), HumanMessage("What the investigation found:\n\n" + "\n\n".join(notes[-12:]) +
+                                                    "\n\nGive your resolution now.")])
+            tokens += n
         patch = None
         if res.action == "patch" and res.file and res.sql:
             patch = {"file": res.file, "sql": res.sql, "explanation": res.evidence}

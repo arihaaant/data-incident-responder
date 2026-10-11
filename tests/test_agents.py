@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from langchain_core.messages import AIMessage
 
@@ -81,6 +82,61 @@ def test_no_conclusion_means_escalate():
     for schema in (Diagnosis, Resolution):
         d = undecided(schema)
         assert d.action == "escalate" and d.root_node == "unknown"
+
+
+def test_root_names_are_canonical():
+    from responder.agents import canonical
+
+    assert canonical("raw.lineitem") == "source.raw.lineitem"
+    assert canonical("source.tpch_warehouse.raw.orders") == "source.raw.orders"
+    assert canonical("model.tpch_warehouse.fct_orders") == "model.fct_orders"
+    assert canonical("staging.stg_orders") == "model.stg_orders"
+    assert canonical("unknown") == "unknown"
+
+
+def test_patch_without_sql_is_sent_back():
+    from responder.agents import incomplete
+
+    res = Resolution(root_node="source.raw.lineitem", cause="upstream_data", action="patch", evidence="dupes")
+    assert incomplete(res)
+    assert incomplete(res.model_copy(update={"file": "models/staging/stg_lineitem.sql", "sql": "select 1"})) is None
+    assert incomplete(res.model_copy(update={"action": "escalate"})) is None
+
+
+class Answers:
+    """Hands back the given answers in order, one per structured call."""
+
+    def __init__(self, *answers):
+        self.answers, self.calls = list(answers), 0
+
+    def with_structured_output(self, schema, **kw):
+        model = self
+
+        class Runner:
+            async def ainvoke(self, messages):
+                model.calls += 1
+                return {"parsed": model.answers.pop(0), "raw": AIMessage("")}
+
+        return Runner()
+
+
+class Lineage:
+    async def ainvoke(self, args):
+        if args["name"] in ("raw.lineitem", "stg_lineitem"):
+            return json.dumps({"node": args["name"]})
+        return json.dumps({"error": "unknown", "known": ["raw.lineitem", "stg_lineitem"]})
+
+
+def test_fallback_conclusion_is_checked():
+    from responder.agents import conclude
+
+    d = dict(cause="upstream_data", action="patch", evidence="dupes")
+    model = Answers(Diagnosis(root_node="raw.lineitems", **d), Diagnosis(root_node="raw.lineitem", **d))
+    got, _ = asyncio.run(conclude(model, {"get_lineage": Lineage()}, Diagnosis, []))
+    assert got.root_node == "source.raw.lineitem" and model.calls == 2
+    model = Answers(Diagnosis(root_node="raw.nope", **d), Diagnosis(root_node="model.nope", **d))
+    got, _ = asyncio.run(conclude(model, {"get_lineage": Lineage()}, Diagnosis, []))
+    assert got.root_node == "unknown" and got.action == "escalate"
 
 
 def test_column_profiles_reach_fixer_and_reviewer():
