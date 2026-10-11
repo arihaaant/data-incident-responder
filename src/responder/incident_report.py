@@ -36,6 +36,17 @@ def evidence(steps):
     return None
 
 
+def profiles(steps):
+    out = []
+    for s in steps:
+        if s.get("tool") == "profile_column":
+            try:
+                out.append(json.loads(s["result"]))
+            except (ValueError, TypeError):
+                pass
+    return out
+
+
 def queries(steps):
     return [s["args"]["query"] for s in steps if s.get("tool") == "run_sql" and "query" in s.get("args", {})]
 
@@ -69,6 +80,10 @@ def render(incident_id, alarms, outcome, steps, project=None):
         lines.append(f"- **Downstream models affected:** {', '.join(f'`{a}`' for a in affected)}")
     if evidence(steps):
         lines += ["", "**Evidence**", "", evidence(steps)]
+    for p in profiles(steps):
+        verdict = "converts without loss" if p.get("lossless") else "would lose data: " + "; ".join(p.get("issues", []))
+        lines += ["", f"**Column profile** `{p.get('column')}` ({p.get('current_type')} to {p.get('target_type')}): "
+                      f"{verdict}"]
     qs = queries(steps)
     if qs:
         lines += ["", f"<details><summary>{len(qs)} queries run during the investigation</summary>", ""]

@@ -35,3 +35,14 @@ def test_failed_fix_is_reported_as_escalation():
            "escalated_after_failed_fix": True}
     md = render("inc025", alarms, out, [{"agent": "review", "output": {"approved": False, "reasons": "drops rows"}}])
     assert "A fix was attempted but did not pass review" in md and "drops rows" in md
+
+
+def test_report_shows_column_profiles():
+    import json
+
+    profile = {"column": "raw.lineitem.l_extendedprice", "current_type": "bigint", "target_type": "decimal(15,2)",
+               "lossless": False, "issues": ["no value has a fractional part"]}
+    out = {"action": "escalate", "root_node": "source.raw.lineitem", "cause": "upstream_data", "patch": None}
+    md = render("inc061", alarms, out, [{"agent": "investigate", "tool": "profile_column",
+                                         "args": {}, "result": json.dumps(profile)}])
+    assert "**Column profile** `raw.lineitem.l_extendedprice` (bigint to decimal(15,2)): would lose data" in md
