@@ -68,7 +68,9 @@ The rules the agents follow are a small team policy:
 - Missing or late data is escalated. No downstream change can honestly put it back.
 
 Two example reports from the final run: [duplicate rows, fixed](docs/examples/duplicate-rows-fixed.md) and
-[prices arriving rounded, escalated](docs/examples/rounded-prices-escalated.md).
+[prices arriving rounded, escalated](docs/examples/rounded-prices-escalated.md). Every step of every run in the
+final evaluation (378 traces: each query, result, decision and timing) can be browsed in the
+[trace explorer](https://arihaaant.github.io/work/data-incident-responder/traces/).
 
 ## Evaluation
 
@@ -158,7 +160,10 @@ python -m responder.figures runs/final --out docs
 ```
 
 The full evaluation runs on Colab with [`notebooks/evaluation_run.ipynb`](notebooks/evaluation_run.ipynb).
-The cross-run numbers above are in [`docs/final_results.json`](docs/final_results.json).
+The cross-run numbers above are in [`docs/final_results.json`](docs/final_results.json). The scored record and
+report for every incident run are in [`results/final`](results/final), along with the Langfuse traces
+compacted to one small file per run (`python -m responder.traces export.json`): the raw export repeats the
+whole conversation in every model call and comes to about 200 MB, the compact traces to 5 MB.
 
 ```
 src/responder/
