@@ -10,3 +10,4 @@ warehouse/dbt_packages/
 .env
 kit/work/
 runs/
+results/**/*.csv
