@@ -1,0 +1,86 @@
+{
+  "id": "inc062",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 10619
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 59.1,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_orders model's contract expects order_date as DATE but the model defines it as VARCHAR, causing a compilation error.",
+        "suspects": [
+          "models/staging/stg_orders.sql (the model itself)",
+          "source raw.orders (upstream raw table definition)",
+          "any downstream models in marts that depend on stg_orders"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.orders",
+        "column": "o_orderdate"
+      },
+      "result": "{\"column\": \"raw.orders.o_orderdate\", \"current_type\": \"varchar\", \"target_type\": \"date\", \"rows\": 15000, \"nulls\": 0, \"contract\": \"stg_orders.order_date is contracted as date\", \"formats_that_parse\": {\"%Y-%m-%d\": 14400}, \"best_format\": \"%Y-%m-%d\", \"convertible\": 14400, \"fail_to_convert\": 600, \"examples_that_fail\": [\"unknown\"], \"lossless\": false, \"issues\": [\"600 values do not convert to date\"], \"conversion\": null}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": "o_orderdate",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "stg_orders model selects o_orderdate as VARCHAR, but contract expects DATE. profile_column shows raw.orders.o_orderdate has 600 values that cannot convert to DATE (lossless false). Therefore source data is invalid for the expected DATE type; cannot patch losslessly."
+      }
+    }
+  ]
+}

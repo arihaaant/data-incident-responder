@@ -1,0 +1,178 @@
+{
+  "id": "inc059",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 41236
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n-- removed overly restrictive date filter to ensure freshness\n",
+    "explanation": "stg_orders max order_date (1998-07-02) is 31 days older than raw.orders max (1998-08-02). The where clause filters out recent orders (< as_of -30 days), causing freshness check failure. Removing the filter aligns stg_orders with raw data.",
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderdate < date '{{ var(\"as_of\") }}' - interval 30 day\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 154.1,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}, {\"node\": \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"status\": \"fail\", \"failing_rows\": 769, \"message\": \"Got 769 results, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "relationships_stg_lineitem_order_key__order_key__ref_stg_orders_"
+      },
+      "result": "{\"error\": \"unknown model or source relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderdate < date '{{ var(\\\"as_of\\\") }}' - interval 30 day\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from stg_orders"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"14800\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select min(order_date), max(order_date) from staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"min(order_date)\", \"max(order_date)\"], \"rows\": [[\"1992-01-01\", \"1998-07-02\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from raw.orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from staging.stg_lineitem"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select max(o_orderdate) as max_date from raw.orders"
+      },
+      "result": "{\"columns\": [\"max_date\"], \"rows\": [[\"1998-08-02\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_orders.sql",
+        "evidence": "stg_orders max order_date (1998-07-02) is 31 days older than raw.orders max (1998-08-02). The where clause filters out recent orders (< as_of -30 days), causing freshness check failure. Removing the filter aligns stg_orders with raw data."
+      }
+    }
+  ]
+}

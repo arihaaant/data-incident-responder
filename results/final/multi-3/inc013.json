@@ -1,0 +1,124 @@
+{
+  "id": "inc013",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 19209
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    cast(c_acctbal as decimal(15,2)) as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "The contract for stg_customers expects the column `account_balance` to be DECIMAL(15,2) but the source column `c_acctbal` is VARCHAR. The column profile shows all values can be losslessly cast to DECIMAL(15,2). Updated the model to cast `c_acctbal` to the required type while preserving the original column name and order, fixing the contract mismatch.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 193.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_customers model's contract expects `account_balance` as DECIMAL(15,2) but the model is producing it as VARCHAR, causing a compilation error and halting downstream builds.",
+        "suspects": [
+          "models/staging/stg_customers.sql \u2013 check the SELECT expression for `account_balance` and its casting.",
+          "schema.yml (or source definition) for the `customers` source \u2013 verify the declared data type.",
+          "any recent upstream changes to the raw.customers table that may have altered the column type."
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal VARCHAR\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdat"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.customer",
+        "column": "c_acctbal"
+      },
+      "result": "{\"column\": \"raw.customer.c_acctbal\", \"current_type\": \"varchar\", \"target_type\": \"decimal(15,2)\", \"rows\": 1500, \"nulls\": 0, \"contract\": \"stg_customers.account_balance is contracted as decimal(15,2)\", \"convertible\": 1500, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"2\": 1500}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.9887, \"lossless\": true, \"issues\": [], \"conversion\": \"cast(c_acctbal as decimal(15,2))\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_customers model selects c_acctbal (VARCHAR) as account_balance, but contract expects DECIMAL(15,2). profile_column shows c_acctbal can be losslessly cast to DECIMAL(15,2). Adding CAST(c_acctbal AS DECIMAL(15,2)) fixes the type mismatch."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The contract for stg_customers expects the column `account_balance` to be DECIMAL(15,2) but the source column `c_acctbal` is VARCHAR. The column profile shows all values can be losslessly cast to DECIMAL(15,2). Updated the model to cast `c_acctbal` to the required type while preserving the original column name and order, fixing the contract mismatch.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly casts source VARCHAR to required DECIMAL(15,2) as confirmed lossless by profile; addresses root cause without masking data."
+      }
+    }
+  ]
+}

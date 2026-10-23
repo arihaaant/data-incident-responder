@@ -1,0 +1,131 @@
+{
+  "id": "inc044",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.fct_daily_revenue",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.fct_daily_revenue",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 16524
+  },
+  "patch": {
+    "file": "models/marts/fct_daily_revenue.sql",
+    "sql": "select\n    order_date,\n    region_name,\n    count(*) as orders,\n    sum(net_revenue) as net_revenue\nfrom {{ ref('fct_orders') }}\ngroup by order_date, region_name",
+    "explanation": "Removed the extraneous `priority` column from the GROUP BY clause. The model previously grouped by `order_date, region_name, priority` but did not select `priority`, causing duplicate rows per region per day when multiple priority values existed. The test `assert_daily_revenue_one_row_per_region` expects a single row per region per day, so grouping only by `order_date` and `region_name` resolves the duplicate rows while preserving the original columns and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    order_date,\n    region_name,\n    count(*) as orders,\n    sum(net_revenue) as net_revenue\nfrom {{ ref('fct_orders') }}\ngroup by order_date, region_name, priority\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 155.9,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The test `assert_daily_revenue_one_row_per_region` expects exactly one row per region per day but found 3,659 rows, indicating duplicate rows in the daily revenue aggregation.",
+        "suspects": [
+          "marts.daily_revenue (the model under test)",
+          "staging.fact_sales (source of sales data)",
+          "raw.sales (raw table for possible duplicate loads)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "marts.daily_revenue"
+      },
+      "result": "{\"error\": \"unknown model or source daily_revenue\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_daily_revenue"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_daily_revenue\", \"upstream\": [\"fct_orders\"], \"downstream\": [], \"checks\": [\"assert_daily_revenue_one_row_per_region\", \"not_null_fct_daily_revenue_order_date\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT region_name, order_date) AS distinct_region_date FROM marts.fct_daily_revenue"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(VARCHAR, DATE)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM marts.fct_daily_revenue"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"13256\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_daily_revenue"
+      },
+      "result": "{\"path\": \"models/marts/fct_daily_revenue.sql\", \"sql\": \"select\\n    order_date,\\n    region_name,\\n    count(*) as orders,\\n    sum(net_revenue) as net_revenue\\nfrom {{ ref('fct_orders') }}\\ngroup by order_date, region_name, priority\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.fct_daily_revenue",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "The test assert_daily_revenue_one_row_per_region expects a single row per region per day. fct_daily_revenue groups by order_date, region_name, priority, but does not select priority, creating duplicate rows for each priority value. This extra grouping column is the source of the duplicate rows, a code issue. Removing priority from the GROUP BY (or including it in SELECT and adjusting downstream) will fix the test."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/fct_daily_revenue.sql",
+        "explanation": "Removed the extraneous `priority` column from the GROUP BY clause. The model previously grouped by `order_date, region_name, priority` but did not select `priority`, causing duplicate rows per region per day when multiple priority values existed. The test `assert_daily_revenue_one_row_per_region` expects a single row per region per day, so grouping only by `order_date` and `region_name` resolves the duplicate rows while preserving the original columns and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes the extraneous grouping column that caused duplicate rows, directly addressing the code change root cause without masking data."
+      }
+    }
+  ]
+}

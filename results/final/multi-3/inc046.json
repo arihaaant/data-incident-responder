@@ -1,0 +1,101 @@
+{
+  "id": "inc046",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 16296
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 92.7,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "The freshness test `assert_orders_fresh` found a stale record (1 row) where none were expected, indicating that recent order data hasn't arrived or the timestamp is out of the allowed window.",
+        "suspects": [
+          "raw.orders source table \u2013 check ingestion timestamps and any recent load failures",
+          "staging.orders view \u2013 verify that the transformation preserves the source timestamp column",
+          "the ETL job or scheduler that populates the orders table \u2013 look for delays, failures, or timezone mismatches"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "raw.orders"
+      },
+      "result": "{\"node\": \"source.tpch_warehouse.raw.orders\", \"upstream\": [], \"downstream\": [\"stg_orders\"], \"checks\": []}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, MIN(_loaded_at) AS min_loaded, MAX(_loaded_at) AS max_loaded FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"min_loaded\", \"max_loaded\"], \"rows\": [[\"14979\", \"1992-01-02 00:00:00\", \"1998-07-31 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "Freshness check assert_orders_fresh failed (1 stale row). stg_orders passes through _loaded_at unchanged. raw.orders _loaded_at max is 1998-07-31, far older than expected, indicating missing recent data. Therefore the problem originates in the source raw.orders table."
+      }
+    }
+  ]
+}

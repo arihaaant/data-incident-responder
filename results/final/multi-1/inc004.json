@@ -1,0 +1,107 @@
+{
+  "id": "inc004",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_mktsegment",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_market_segment",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 9914
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_market_segment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "The upstream source renamed column c_mktsegment to c_market_segment. Updated the staging model to reference the new column name while preserving all other columns and aliases. This resolves the binder error without altering column types or other logic.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 199.1,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_customers references column c_mktsegment which no longer exists in the raw customers table; the column is now named c_market_segment.",
+        "suspects": [
+          "source raw.customers (schema change)",
+          "model tpch_warehouse.stg_customers (SQL file)",
+          "source.yml definition for raw.customers"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_market_segment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": "c_market_segment",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.customer table shows column c_market_segment (renamed from c_mktsegment). stg_customers model references old name c_mktsegment, causing binder error. Policy: renamed column is lossless, fix by updating staging model. Root is source.raw.customer."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The upstream source renamed column c_mktsegment to c_market_segment. Updated the staging model to reference the new column name while preserving all other columns and aliases. This resolves the binder error without altering column types or other logic.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates staging model to use renamed source column c_market_segment, addressing binder error without masking data or altering logic. Rename is lossless; no type/format conversion needed."
+      }
+    }
+  ]
+}

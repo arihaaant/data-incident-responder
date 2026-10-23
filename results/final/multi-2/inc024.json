@@ -1,0 +1,110 @@
+{
+  "id": "inc024",
+  "kind": "null_spike",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 21400
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 116.1,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The stg_customers model has 60 null values in the primary key column and 600 orphaned order rows that cannot find a matching customer_key, indicating a sudden loss of key integrity in the source data.",
+        "suspects": [
+          "raw.customers source table (check for missing or malformed customer_key values)",
+          "stg_customers model (transformation logic that might be dropping or nulling the key)",
+          "raw.orders source table (ensure customer_key is present and correctly populated)",
+          "stg_orders model (join logic that could be altering or dropping the key)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(customer_key) AS non_null_keys, COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"customer_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(customer_key) AS non_null_keys, COUNT(DISTINCT customer_key) AS distinct_keys FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_null_keys\", \"distinct_keys\"], \"rows\": [[\"1500\", \"1440\", \"1440\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(c_custkey) AS non_null_keys, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_null_keys\", \"distinct_keys\"], \"rows\": [[\"1500\", \"1440\", \"1440\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(o_custkey) AS non_null_keys, COUNT(DISTINCT o_custkey) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_null_keys\", \"distinct_keys\"], \"rows\": [[\"15000\", \"15000\", \"1000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "raw.customer table has 1500 rows but only 1440 non-null customer_key values, matching the 60 nulls flagged by not_null_stg_customers_customer_key. stg_customers model directly selects c_custkey as customer_key, so nulls originate from source. raw.orders contains 15000 rows with 15000 non-null o_custkey values but only 1000 distinct keys, while stg_customers provides 1440 distinct keys, causing 600 orphaned order rows in relationships check. Thus the issue starts at raw.customer source data."
+      }
+    }
+  ]
+}

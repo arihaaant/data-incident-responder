@@ -1,0 +1,35 @@
+{
+  "id": "inc032",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 0
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": false,
+    "resolved": false
+  },
+  "seconds": 0.0,
+  "steps": [
+    {
+      "agent": "rules",
+      "output": "model.tpch_warehouse.stg_orders"
+    }
+  ]
+}

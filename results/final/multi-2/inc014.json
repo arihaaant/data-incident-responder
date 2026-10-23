@@ -1,0 +1,91 @@
+{
+  "id": "inc014",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_brand",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 6430
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand_name as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}",
+    "explanation": "The upstream raw.part source renamed the column `p_brand` to `p_brand_name`. The staging model `stg_parts` still referenced the old name, causing a binder error. Updated the SELECT to use `p_brand_name` while preserving the original alias `brand`. All other column references and aliases remain unchanged, maintaining the expected schema and data types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 88.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_parts fails because the column `p_brand` referenced in the SELECT no longer exists in the source table; the binder reports only `p_brand_name` is available.",
+        "suspects": [
+          "Source table `raw.parts` \u2013 check its current schema for column name changes (e.g., `p_brand` renamed to `p_brand_name`).",
+          "Staging model `models/staging/stg_parts.sql` \u2013 update the SELECT to use the correct column name or add a fallback.",
+          "Any downstream models in `marts` that depend on `stg_parts` \u2013 they may also need adjustments after the fix."
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.part",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "Binder error in model stg_parts: column p_brand not found. raw.part schema lists p_brand_name instead, indicating a column rename. The staging model must be updated to reference p_brand_name, fixing the schema drift."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_parts.sql",
+        "explanation": "The upstream raw.part source renamed the column `p_brand` to `p_brand_name`. The staging model `stg_parts` still referenced the old name, causing a binder error. Updated the SELECT to use `p_brand_name` while preserving the original alias `brand`. All other column references and aliases remain unchanged, maintaining the expected schema and data types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates reference to renamed column p_brand_name, preserving alias and schema. No type/format conversion involved, so lack of column profile is acceptable."
+      }
+    }
+  ]
+}

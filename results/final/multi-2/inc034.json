@@ -1,0 +1,165 @@
+{
+  "id": "inc034",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "order_line_id",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 40449
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": false,
+    "resolved": false
+  },
+  "seconds": 155.1,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_lineitem_order_line_id failed with 1,550 duplicate rows, indicating duplicate primary key values in the staging lineitem model.",
+        "suspects": [
+          "stg_lineitem (the staging model for the raw lineitem table)",
+          "raw.lineitem source (upstream raw data may contain duplicate order_line_id values)",
+          "any recent transformations or incremental loads that might have upserted without de\u2011duplicating"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"61725\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"61725\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"61725\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_line_id) AS distinct_ids, COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_line_id\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT l_orderkey || '-' || l_linenumber) AS distinct_ids FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_ids\"], \"rows\": [[\"61725\", \"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT l_orderkey, l_linenumber, COUNT(*) AS cnt FROM raw.lineitem GROUP BY l_orderkey, l_linenumber HAVING COUNT(*) > 1 LIMIT 10"
+      },
+      "result": "{\"columns\": [\"l_orderkey\", \"l_linenumber\", \"cnt\"], \"rows\": [[\"193\", \"3\", \"2\"], [\"486\", \"6\", \"2\"], [\"643\", \"3\", \"2\"], [\"708\", \"2\", \"2\"], [\"1153\", \"4\", \"2\"], [\"1383\", \"2\", \"2\"], [\"1761\", \"6\", \"2\"], [\"1828\", \"4\", \"2\"], [\"2468\", \"3\", \"2\"], [\"3296\", \"7\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.lineitem WHERE l_orderkey = 193 AND l_linenumber = 3"
+      },
+      "result": "{\"columns\": [\"l_orderkey\", \"l_partkey\", \"l_suppkey\", \"l_linenumber\", \"l_quantity\", \"l_extendedprice\", \"l_discount\", \"l_tax\", \"l_returnflag\", \"l_linestatus\", \"l_shipdate\", \"l_commitdate\", \"l_receiptdate\", \"l_shipinstruct\", \"l_shipmode\", \"l_comment\"], \"rows\": [[\"193\", \"939\", \"74\", \"3\", \"23.00\", \"42318.39\", \"0.06\", \"0.05\", \"A\", \"F\", \"1993-08-21\", \"1993-10-11\", \"1993-09-02\", \"DELIVER IN PERSON\", \"TRUCK\", \"he carefully final instructions. ca\"], [\"193\", \"939\", \"74\", \"3\", \"23.00\", \"42318.39\", \"0.06\", \""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS dup_groups FROM (SELECT l_orderkey, l_linenumber, COUNT(*) AS cnt FROM raw.lineitem GROUP BY l_orderkey, l_linenumber HAVING COUNT(*) > 1) t"
+      },
+      "result": "{\"columns\": [\"dup_groups\"], \"rows\": [[\"1550\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.lineitem WHERE l_orderkey = 193 AND l_linenumber = 3"
+      },
+      "result": "{\"columns\": [\"l_orderkey\", \"l_partkey\", \"l_suppkey\", \"l_linenumber\", \"l_quantity\", \"l_extendedprice\", \"l_discount\", \"l_tax\", \"l_returnflag\", \"l_linestatus\", \"l_shipdate\", \"l_commitdate\", \"l_receiptdate\", \"l_shipinstruct\", \"l_shipmode\", \"l_comment\"], \"rows\": [[\"193\", \"939\", \"74\", \"3\", \"23.00\", \"42318.39\", \"0.06\", \"0.05\", \"A\", \"F\", \"1993-08-21\", \"1993-10-11\", \"1993-09-02\", \"DELIVER IN PERSON\", \"TRUCK\", \"he carefully final instructions. ca\"], [\"193\", \"939\", \"74\", \"3\", \"23.00\", \"42318.39\", \"0.06\", \""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT l_orderkey, l_linenumber, COUNT(*) AS total, COUNT(DISTINCT * ) AS distinct_rows FROM raw.lineitem GROUP BY l_orderkey, l_linenumber HAVING COUNT(*) > 1 LIMIT 10"
+      },
+      "result": "{\"error\": \"Binder Error: STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) AS distinct_vals FROM raw.lineitem WHERE l_orderkey = 193 AND l_linenumber = 3"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(BIGINT, BIGINT, DECIMAL(15,2), DECIMAL(15,2), DECIMAL(15,2), DECIMAL(15,2), VARCHAR, VARCHAR, DATE, DATE, DATE, VARCHAR, VARCHAR, VARCHAR)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": "order_line_id",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "raw.lineitem has 61,725 rows but only 60,175 distinct order_line_id (l_orderkey||'-'||l_linenumber). Duplicate groups count = 1,550 matching failing check. Example duplicate rows for order_key 193, line_number 3 are identical duplicates, indicating source delivered duplicate rows. Staging model simply passes through, so issue originates in raw source."
+      }
+    }
+  ]
+}

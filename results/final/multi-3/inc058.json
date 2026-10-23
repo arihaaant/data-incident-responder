@@ -1,0 +1,164 @@
+{
+  "id": "inc058",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 29333
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "Removed the filter `where o_orderstatus <> 'O'` which was unintentionally dropping orders with status 'O'. This restores the full set of 15,000 source rows, fixing the relationship check between lineitems and orders and the freshness check.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderstatus <> 'O'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 151.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "Orders data is missing or delayed: freshness test flagged 1 stale order, and the foreign\u2011key relationship from lineitem to orders failed for 29k rows, indicating many lineitems reference orders that haven't been loaded yet.",
+        "suspects": [
+          "raw.orders source (ingestion schedule / upstream feed)",
+          "stg_orders model (materialization / refresh timing)",
+          "the job that loads orders into DuckDB (e.g., dbt run or external ETL)",
+          "order_key generation / partitioning logic that might delay order records"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "relationships_stg_lineitem_order_key__order_key__ref_stg_orders_"
+      },
+      "result": "{\"error\": \"unknown model or source relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT COUNT(*) FROM raw.orders) AS raw_cnt, (SELECT COUNT(*) FROM stg_orders) AS stg_cnt"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS raw_orders_cnt FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"raw_orders_cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS lineitem_cnt FROM stg_lineitem"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_lineitem, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS lineitem_cnt FROM staging.stg_lineitem"
+      },
+      "result": "{\"columns\": [\"lineitem_cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS stg_orders_cnt FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"stg_orders_cnt\"], \"rows\": [[\"7667\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderstatus <> 'O'\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.orders has 15000 rows, but stg_orders only 7667 rows. The stg_orders model filters out orders with status 'O' (where o_orderstatus <> 'O'), dropping ~7300 rows. This causes many lineitems (29165) to reference missing orders, failing the relationship check, and also triggers the freshness check. The issue originates in the stg_orders model code, not the source data."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "Removed the filter `where o_orderstatus <> 'O'` which was unintentionally dropping orders with status 'O'. This restores the full set of 15,000 source rows, fixing the relationship check between lineitems and orders and the freshness check.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes erroneous filter that dropped ~7300 orders, restoring full source row count and fixing relationship and freshness failures. No masking or data alteration; appropriate correction to staging model."
+      }
+    }
+  ]
+}

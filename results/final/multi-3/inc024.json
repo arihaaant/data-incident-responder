@@ -1,0 +1,94 @@
+{
+  "id": "inc024",
+  "kind": "null_spike",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 14969
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 93.9,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The stg_customers.customer_key column has 60 null values, causing 600 orphaned rows in stg_orders that reference missing customer keys.",
+        "suspects": [
+          "stg_customers model (especially the transformation that generates customer_key)",
+          "raw.customers source table (incoming data may be missing IDs)",
+          "stg_orders model (foreign key mapping logic)",
+          "ETL job that populates raw.customers"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS raw_cnt FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"raw_cnt\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, SUM(CASE WHEN c_custkey IS NULL THEN 1 ELSE 0 END) AS nulls FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total\", \"nulls\"], \"rows\": [[\"1500\", \"60\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": "c_custkey",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "raw.customer has 1500 rows, with 60 null c_custkey values (SELECT COUNT(*) ...). stg_customers maps c_custkey to customer_key, so not_null_stg_customers_customer_key fails with 60 rows. The downstream relationship check fails with 600 orphaned stg_orders rows referencing missing customer keys. The issue originates in the source raw.customer data, not in any dbt model."
+      }
+    }
+  ]
+}

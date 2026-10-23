@@ -1,0 +1,83 @@
+{
+  "id": "inc009",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_shipdate",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 12448
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_ship_date as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n",
+    "explanation": "The dbt build failed because the staging model referenced column `l_shipdate` which does not exist in the source `raw.lineitem`. The source table has column `l_ship_date` instead, indicating a column rename upstream. Updating the staging model to use the new column name fixes the runtime error, as confirmed by try_patch which shows no remaining problems.",
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 162.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Runtime Error in model stg_lineitem (models/staging/stg_lineitem.sql)\\n  Binder Error: Referenced column \\\"l_shipdate\\\" not found in FROM clause!\\n  Candidate bindings: \\\"l_ship_date\\\", \\\"l_shipmode\\\", \\\"l_shipinstruct\\\", \\\"l_partkey\\\", \\\"l_commitdate\\\"\\n  \\n  LINE 14:     l_shipdate as ship_date,\\n               ^\"}], \"skipped_downstream\": 19}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_lineitem.sql",
+        "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_ship_date as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "file": "models/staging/stg_lineitem.sql",
+        "evidence": "The dbt build failed because the staging model referenced column `l_shipdate` which does not exist in the source `raw.lineitem`. The source table has column `l_ship_date` instead, indicating a column rename upstream. Updating the staging model to use the new column name fixes the runtime error, as confirmed by try_patch which shows no remaining problems."
+      }
+    }
+  ]
+}

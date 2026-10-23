@@ -1,0 +1,92 @@
+{
+  "id": "inc023",
+  "kind": "null_spike",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 12516
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 79.7,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "1550 rows in stg_lineitem have null order_line_id and order_key, violating not\u2011null checks.",
+        "suspects": [
+          "source: raw.lineitem (columns order_line_id / order_key may be missing or null)",
+          "staging model: stg_lineitem (transformation logic that populates these fields)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(order_line_id) AS non_null_order_line_id, COUNT(order_key) AS non_null_order_key FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_line_id\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows,\n       COUNT(l_orderkey) AS non_null_orderkey,\n       COUNT(l_linenumber) AS non_null_linenumber,\n       SUM(CASE WHEN l_orderkey IS NULL THEN 1 ELSE 0 END) AS null_orderkey,\n       SUM(CASE WHEN l_linenumber IS NULL THEN 1 ELSE 0 END) AS null_linenumber\nFROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_null_orderkey\", \"non_null_linenumber\", \"null_orderkey\", \"null_linenumber\"], \"rows\": [[\"60175\", \"58625\", \"60175\", \"1550\", \"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": "l_orderkey",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "raw.lineitem has 1550 rows where l_orderkey is NULL (see count query). stg_lineitem builds order_key from l_orderkey and order_line_id via concatenation, so those rows become NULL, causing not_null checks to fail. The issue originates in the source data, not in model logic."
+      }
+    }
+  ]
+}

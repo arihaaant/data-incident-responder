@@ -1,0 +1,107 @@
+{
+  "id": "inc007",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 10302
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount_rate as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount_rate) as net_revenue\nfrom {{ source('raw', 'lineitem') }}",
+    "explanation": "The upstream source changed the column name from l_discount to l_discount_rate. The staging model referenced the old name, causing a binder error. Updated the model to select l_discount_rate as discount and use it in the net_revenue calculation, preserving all other column names and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 100.5,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_lineitem model fails to compile because it references a column (l_discount) that no longer exists in the source raw table. The binder error lists available columns, indicating the upstream schema changed.",
+        "suspects": [
+          "models/staging/stg_lineitem.sql (the SELECT list referencing l_discount)",
+          "source raw.lineitem definition (schema in raw layer)",
+          "any recent upstream changes to the raw lineitem table or source definitions"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount_rate DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": "l_discount",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.lineitem columns list lacks l_discount but includes l_discount_rate; stg_lineitem model SQL selects l_discount as discount, causing binder error. The schema change is upstream; fixing by updating model to use l_discount_rate."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_lineitem.sql",
+        "explanation": "The upstream source changed the column name from l_discount to l_discount_rate. The staging model referenced the old name, causing a binder error. Updated the model to select l_discount_rate as discount and use it in the net_revenue calculation, preserving all other column names and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates staging model to use renamed source column l_discount_rate, preserving logic and calculations. No data masking or loss introduced."
+      }
+    }
+  ]
+}

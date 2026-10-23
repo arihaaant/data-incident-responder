@@ -1,0 +1,163 @@
+{
+  "id": "inc037",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 27452
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select distinct\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "Added DISTINCT to the select to remove the 75 duplicate rows that have identical values across all columns. This resolves the unique_stg_customers_customer_key check failure while preserving column names and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 216.6,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_customers.customer_key found 75 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_customers model (staging/customers.sql)",
+          "raw.customers source table",
+          "any upstream transformations that merge or append to raw.customers"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"customer_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"1575\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt FROM raw.customer GROUP BY c_custkey HAVING COUNT(*) > 1 ORDER BY cnt DESC LIMIT 10"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"cnt\"], \"rows\": [[\"16\", \"2\"], [\"37\", \"2\"], [\"58\", \"2\"], [\"79\", \"2\"], [\"100\", \"2\"], [\"116\", \"2\"], [\"137\", \"2\"], [\"158\", \"2\"], [\"179\", \"2\"], [\"200\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 16"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"16\", \"***\", \"***\", \"10\", \"***\", \"4681.03\", \"FURNITURE\", \"ests cajole. pinto beans detect slyly. final packages cajole slyly \"], [\"16\", \"***\", \"***\", \"10\", \"***\", \"4681.03\", \"FURNITURE\", \"ests cajole. pinto beans detect slyly. final packages cajole slyly \"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM raw.customer WHERE c_custkey = 16"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 16"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"16\", \"***\", \"***\", \"10\", \"***\", \"4681.03\", \"FURNITURE\", \"ests cajole. pinto beans detect slyly. final packages cajole slyly \"], [\"16\", \"***\", \"***\", \"10\", \"***\", \"4681.03\", \"FURNITURE\", \"ests cajole. pinto beans detect slyly. final packages cajole slyly \"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT CONCAT_WS('||', c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment)) AS distinct_rows FROM raw.customer WHERE c_custkey = 16"
+      },
+      "result": "{\"columns\": [\"total\", \"distinct_rows\"], \"rows\": [[\"2\", \"1\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": "c_custkey",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.customer has 1575 rows but only 1500 distinct c_custkey values; 75 duplicate keys (e.g., c_custkey=16 appears twice with identical column values). stg_customers directly selects from raw.customer, so duplicates flow downstream, causing unique_stg_customers_customer_key check to fail. Duplicates are identical across all columns, indicating a double batch load, which can be resolved by deduplication in the staging model."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "Added DISTINCT to the select to remove the 75 duplicate rows that have identical values across all columns. This resolves the unique_stg_customers_customer_key check failure while preserving column names and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix adds DISTINCT to remove exact duplicate rows, directly addressing the duplicate key issue identified in the diagnosis without masking data or altering logic."
+      }
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "id": "inc004",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_mktsegment",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 16882
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_market_segment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n",
+    "explanation": "The failing test shows a Binder Error: column \"c_mktsegment\" not found. The raw source table raw.customer has column \"c_market_segment\". The staging model incorrectly referenced \"c_mktsegment\". Fixing the column name resolves the error and passes all checks.",
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 139.1,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_customers\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Runtime Error in model stg_customers (models/staging/stg_customers.sql)\\n  Binder Error: Referenced column \\\"c_mktsegment\\\" not found in FROM clause!\\n  Candidate bindings: \\\"c_market_segment\\\", \\\"c_comment\\\", \\\"c_name\\\", \\\"c_custkey\\\", \\\"c_nationkey\\\"\\n  \\n  LINE 9:     c_mktsegment as market_segment,\\n              ^\"}], \"skipped_downstream\": 21}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer LIMIT 5"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_market_segment\", \"c_comment\"], \"rows\": [[\"1\", \"***\", \"***\", \"15\", \"***\", \"711.56\", \"BUILDING\", \"y final requests wake slyly quickly special accounts. blithely\"], [\"2\", \"***\", \"***\", \"13\", \"***\", \"121.65\", \"AUTOMOBILE\", \"y carefully regular foxes. slyly regular requests about the bli\"], [\"3\", \"***\", \"***\", \"1\", \"***\", \"7498.12\", \"AUTOMOBILE\", \"fully. carefully silent instructions sleep alongside of the slyl"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_customers.sql",
+        "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_market_segment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_customers.sql",
+        "evidence": "The failing test shows a Binder Error: column \"c_mktsegment\" not found. The raw source table raw.customer has column \"c_market_segment\". The staging model incorrectly referenced \"c_mktsegment\". Fixing the column name resolves the error and passes all checks."
+      }
+    }
+  ]
+}

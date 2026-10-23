@@ -1,0 +1,115 @@
+{
+  "id": "inc044",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.fct_daily_revenue",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.fct_daily_revenue",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 10701
+  },
+  "patch": {
+    "file": "models/marts/fct_daily_revenue.sql",
+    "sql": "select\n    order_date,\n    region_name,\n    count(*) as orders,\n    sum(net_revenue) as net_revenue\nfrom {{ ref('fct_orders') }}\ngroup by order_date, region_name\n",
+    "explanation": "Removed `priority` from the GROUP BY clause. The model originally grouped by order_date, region_name, and priority, which produced multiple rows per region per day when priority varied. The test `assert_daily_revenue_one_row_per_region` expects a single row per region per day, so eliminating `priority` from the grouping resolves the duplicate rows while preserving the original columns and their types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    order_date,\n    region_name,\n    count(*) as orders,\n    sum(net_revenue) as net_revenue\nfrom {{ ref('fct_orders') }}\ngroup by order_date, region_name, priority\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 132.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The test `assert_daily_revenue_one_row_per_region` expects exactly one row per region per day, but 3,659 rows were returned, indicating duplicate rows in the daily revenue aggregation.",
+        "suspects": [
+          "marts.daily_revenue (the model under test)",
+          "staging.orders and staging.lineitem (sources feeding the aggregation)",
+          "raw.orders / raw.lineitem (possible duplicate source records)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "marts.daily_revenue"
+      },
+      "result": "{\"error\": \"unknown model or source daily_revenue\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "marts"
+      },
+      "result": "{\"marts.dim_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\", \"nation_name VARCHAR\", \"region_name VARCHAR\"], \"marts.fct_daily_revenue\": [\"order_date DATE\", \"region_name VARCHAR\", \"orders BIGINT\", \"net_revenue DECIMAL(38,4)\"], \"marts.fct_order_items\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"brand VARCHAR\", \"part_type VARCHAR\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_daily_revenue"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_daily_revenue\", \"upstream\": [\"fct_orders\"], \"downstream\": [], \"checks\": [\"assert_daily_revenue_one_row_per_region\", \"not_null_fct_daily_revenue_order_date\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_daily_revenue"
+      },
+      "result": "{\"path\": \"models/marts/fct_daily_revenue.sql\", \"sql\": \"select\\n    order_date,\\n    region_name,\\n    count(*) as orders,\\n    sum(net_revenue) as net_revenue\\nfrom {{ ref('fct_orders') }}\\ngroup by order_date, region_name, priority\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.fct_daily_revenue",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "fct_daily_revenue groups by order_date, region_name, priority, producing multiple rows per region per day. The test expects one row per region per day. Removing priority from GROUP BY will fix duplicates."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/fct_daily_revenue.sql",
+        "explanation": "Removed `priority` from the GROUP BY clause. The model originally grouped by order_date, region_name, and priority, which produced multiple rows per region per day when priority varied. The test `assert_daily_revenue_one_row_per_region` expects a single row per region per day, so eliminating `priority` from the grouping resolves the duplicate rows while preserving the original columns and their types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly addresses duplicate rows by removing non\u2011required priority from GROUP BY, aligning model output with test expectations without masking data or altering column semantics."
+      }
+    }
+  ]
+}

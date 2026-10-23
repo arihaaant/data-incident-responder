@@ -1,0 +1,81 @@
+{
+  "id": "inc062",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 13109
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 50.5,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_orders\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Compilation Error in model stg_orders (models/staging/stg_orders.sql)\\n  This model has an enforced contract that failed.\\n  Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\\n  \\n  | column_name | definition_type | contract_type | mismatch_reason    |\\n  | ----------- | --------------- | ------------- | -------------"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_orders\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.orders",
+        "column": "o_orderdate"
+      },
+      "result": "{\"column\": \"raw.orders.o_orderdate\", \"current_type\": \"varchar\", \"target_type\": \"date\", \"rows\": 15000, \"nulls\": 0, \"contract\": \"stg_orders.order_date is contracted as date\", \"formats_that_parse\": {\"%Y-%m-%d\": 14400}, \"best_format\": \"%Y-%m-%d\", \"convertible\": 14400, \"fail_to_convert\": 600, \"examples_that_fail\": [\"unknown\"], \"lossless\": false, \"issues\": [\"600 values do not convert to date\"], \"conversion\": null}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The stg_orders model has a contract that order_date must be DATE, but the source raw.orders.o_orderdate column is VARCHAR. Profile shows 600 values (e.g., \"unknown\") cannot be converted to DATE, and the conversion is not lossless. Therefore the problem originates in the raw source data, not in the model SQL."
+      }
+    }
+  ]
+}

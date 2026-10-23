@@ -1,0 +1,155 @@
+{
+  "id": "inc057",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 27967
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n-- Removed restrictive date filter that excluded 1998 orders\n",
+    "explanation": "The original model filtered orders to only those with a year before 1998, causing missing rows and downstream failures. The filter was removed to include all orders, matching the raw source and fixing freshness and relationship checks.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere year(o_orderdate) < 1998\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 142.3,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "Freshness test on orders failed (1 stale order) and foreign\u2011key test between lineitem and orders found 5,315 orphan lineitems, indicating that many order records are missing or delayed.",
+        "suspects": [
+          "stg_orders model (and its upstream raw.orders source)",
+          "the ingestion job that loads orders into the raw schema",
+          "any recent changes to the orders extraction schedule or CDC pipeline"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT COUNT(*) FROM raw.orders) AS raw_cnt, (SELECT COUNT(*) FROM staging.stg_orders) AS stg_cnt"
+      },
+      "result": "{\"columns\": [\"raw_cnt\", \"stg_cnt\"], \"rows\": [[\"15000\", \"13654\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_key) FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere year(o_orderdate) < 1998\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MIN(o_orderdate) AS min_date, MAX(o_orderdate) AS max_date FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"min_date\", \"max_date\"], \"rows\": [[\"1992-01-01\", \"1998-08-02\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT o_orderkey) FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"count(DISTINCT o_orderkey)\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MAX(loaded_at) AS max_loaded, MIN(loaded_at) AS min_loaded FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"max_loaded\", \"min_loaded\"], \"rows\": [[\"1998-01-01 00:00:00\", \"1992-01-02 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.orders has 15,000 rows (order dates up to 1998-08-02). stg_orders only has 13,654 rows because its SQL filters with `where year(o_orderdate) < 1998`, dropping all 1998 orders. This filter removes 1,346 orders, causing orphan lineitems (5,315) and a freshness failure (max loaded_at 1998-01-01). The raw source is correct; the model\u2019s filter is the problem, so patch the model to remove or adjust the date filter."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "The original model filtered orders to only those with a year before 1998, causing missing rows and downstream failures. The filter was removed to include all orders, matching the raw source and fixing freshness and relationship checks.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Patch correctly removes the erroneous date filter, restoring all source rows and fixing orphan and freshness issues. No masking or data alteration involved."
+      }
+    }
+  ]
+}

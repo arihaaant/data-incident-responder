@@ -1,0 +1,97 @@
+{
+  "id": "inc061",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 24719
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 63.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Compilation Error in model stg_lineitem (models/staging/stg_lineitem.sql)\\n  This model has an enforced contract that failed.\\n  Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\\n  \\n  | column_name    | definition_type | contract_type | mismatch_reason    |\\n  | -------------- | --------------- | ------------- | -"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice BIGINT\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdate"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select max(l_extendedprice) as max_price, max(l_extendedprice * (1 - l_discount)) as max_rev from raw.lineitem"
+      },
+      "result": "{\"columns\": [\"max_price\", \"max_rev\"], \"rows\": [[\"94950\", \"94800.00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select * from information_schema.columns where table_name = 'stg_lineitem'"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"column_name\", \"ordinal_position\", \"column_default\", \"is_nullable\", \"data_type\", \"character_maximum_length\", \"character_octet_length\", \"numeric_precision\", \"numeric_precision_radix\", \"numeric_scale\", \"datetime_precision\", \"interval_type\", \"interval_precision\", \"character_set_catalog\", \"character_set_schema\", \"character_set_name\", \"collation_catalog\", \"collation_schema\", \"collation_name\", \"domain_catalog\", \"domain_schema\", \"domain_name\","
+    },
+    {
+      "agent": "single",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.lineitem",
+        "column": "l_extendedprice"
+      },
+      "result": "{\"column\": \"raw.lineitem.l_extendedprice\", \"current_type\": \"bigint\", \"target_type\": \"decimal(15,2)\", \"rows\": 60175, \"nulls\": 0, \"contract\": \"stg_lineitem.extended_price is contracted as decimal(15,2)\", \"convertible\": 60175, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"0\": 60175}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.0, \"lossless\": false, \"issues\": [\"no value has a fractional part although the contract keeps 2 decimal places; if the source used to send fractions, they were dropped before arriving\"], \"conversion\": null}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The staging model stg_lineitem fails contract checks: column extended_price is defined as DECIMAL(15,2) but the source raw.lineitem.l_extendedprice is BIGINT, and net_revenue is defined as DECIMAL(18,4) but the expression yields DECIMAL(35,2). Profile of raw.lineitem.l_extendedprice shows lossless = false because the source no longer provides fractional digits expected by the contract, indicating a type/format change that is not losslessly convertible. According to team policy, we can only patch a type change if the profile reports lossless, otherwise we must escalate. Therefore the problem originates from the raw.lineitem source table."
+      }
+    }
+  ]
+}

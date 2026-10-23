@@ -1,0 +1,107 @@
+{
+  "id": "inc039",
+  "kind": "duplicates",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_partkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 20994
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\nqualify row_number() over (partition by p_partkey order by p_partkey) = 1",
+    "explanation": "The unique_stg_parts_part_key test failed with 200 duplicate rows. raw.part has 2,200 rows but only 2,000 distinct p_partkey values, indicating duplicates. A query grouping by p_partkey shows each duplicate has identical values for all other columns, confirming exact duplicate batches. Adding a deduplication step (row_number partition by p_partkey) in stg_parts removes the duplicates, and try_patch confirms all checks now pass.",
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 125.2,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_stg_parts_part_key\", \"status\": \"fail\", \"failing_rows\": 200, \"message\": \"Got 200 results, configured to fail if != 0\"}], \"skipped_downstream\": 12}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_parts\", \"upstream\": [\"raw.part\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"not_null_stg_parts_part_key\", \"unique_stg_parts_part_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.part"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"2200\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"path\": \"models/staging/stg_parts.sql\", \"sql\": \"select\\n    p_partkey as part_key,\\n    p_name as part_name,\\n    p_brand as brand,\\n    p_type as part_type,\\n    p_retailprice as retail_price\\nfrom {{ source('raw', 'part') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT p_partkey) AS distinct_keys FROM raw.part"
+      },
+      "result": "{\"columns\": [\"distinct_keys\"], \"rows\": [[\"2000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_brand) AS brand_cnt, COUNT(DISTINCT p_type) AS type_cnt, COUNT(DISTINCT p_retailprice) AS price_cnt FROM raw.part GROUP BY p_partkey HAVING COUNT(*) > 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\", \"name_cnt\", \"brand_cnt\", \"type_cnt\", \"price_cnt\"], \"rows\": [[\"111\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"237\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"311\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"616\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"853\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"879\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"937\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1079\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1137\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1200\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1216\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1232\", \"2\", \"1\", \"1\", \"1\", "
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_parts.sql",
+        "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\nqualify row_number() over (partition by p_partkey order by p_partkey) = 1"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.part",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "file": "models/staging/stg_parts.sql",
+        "evidence": "The unique_stg_parts_part_key test failed with 200 duplicate rows. raw.part has 2,200 rows but only 2,000 distinct p_partkey values, indicating duplicates. A query grouping by p_partkey shows each duplicate has identical values for all other columns, confirming exact duplicate batches. Adding a deduplication step (row_number partition by p_partkey) in stg_parts removes the duplicates, and try_patch confirms all checks now pass."
+      }
+    }
+  ]
+}

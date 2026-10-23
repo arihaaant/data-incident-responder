@@ -1,0 +1,195 @@
+{
+  "id": "inc040",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.fct_orders",
+    "root_column": "order_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.fct_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 36673
+  },
+  "patch": {
+    "file": "models/marts/fct_orders.sql",
+    "sql": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key",
+    "explanation": "Removed the erroneous grouping by line_number in the items CTE. The original query aggregated fct_order_items by both order_key and line_number, which produced multiple rows per order and caused duplicate order_key rows in fct_orders, violating the unique constraint. By grouping only on order_key, we correctly aggregate item counts and revenue per order, ensuring one row per order_key and restoring the uniqueness check.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key, line_number\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 332.7,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on `order_key` in the `fct_orders` fact table found 12,900 duplicate rows, indicating a duplicate incident.",
+        "suspects": [
+          "marts.fct_orders",
+          "staging.orders",
+          "raw.orders"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "marts.fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT order_key) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT order_key) AS distinct_keys FROM staging.orders"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name orders does not exist!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT o_orderkey) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"15000\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "marts.fct_orders"
+      },
+      "result": "{\"error\": \"no model called marts.fct_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.fct_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.fct_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.fct_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.fct_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "tpch_warehouse.fct_orders"
+      },
+      "result": "{\"error\": \"no model called tpch_warehouse.fct_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key, line_number\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT order_key) AS distinct_keys FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"15000\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_order_items"
+      },
+      "result": "{\"path\": \"models/marts/fct_order_items.sql\", \"sql\": \"select\\n    li.order_line_id,\\n    li.order_key,\\n    li.line_number,\\n    li.part_key,\\n    p.brand,\\n    p.part_type,\\n    li.quantity,\\n    li.extended_price,\\n    li.discount,\\n    li.net_revenue,\\n    li.return_flag,\\n    li.ship_date\\nfrom {{ ref('stg_lineitem') }} li\\nleft join {{ ref('stg_parts') }} p on li.part_key = p.part_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT order_key) AS distinct_keys FROM marts.fct_orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"60175\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.fct_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.orders has 15000 rows distinct order_key; staging.stg_orders also 15000 distinct; fct_orders has 60175 rows but only 15000 distinct order_key, indicating duplication from join. items CTE groups by order_key, line_number, producing multiple rows per order, causing duplicate rows in fct_orders. Fix by grouping only by order_key (remove line_number) in fct_order_items aggregation."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/fct_orders.sql",
+        "explanation": "Removed the erroneous grouping by line_number in the items CTE. The original query aggregated fct_order_items by both order_key and line_number, which produced multiple rows per order and caused duplicate order_key rows in fct_orders, violating the unique constraint. By grouping only on order_key, we correctly aggregate item counts and revenue per order, ensuring one row per order_key and restoring the uniqueness check.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes erroneous line_number grouping, correctly aggregates per order_key and eliminates duplicate rows, directly addressing the root cause."
+      }
+    }
+  ]
+}

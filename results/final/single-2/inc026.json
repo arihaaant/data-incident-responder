@@ -1,0 +1,99 @@
+{
+  "id": "inc026",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_lineitem",
+    "root_column": "extended_price",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 18301
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n",
+    "explanation": "The not_null_stg_lineitem_extended_price test failed (29,778 nulls). The model used a CASE that set extended_price to NULL when l_returnflag <> 'N', causing the failure. Changing to direct l_extendedprice eliminates unintended NULLs. try_patch confirmed all checks pass.",
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    case when l_returnflag = 'N' then l_extendedprice end as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 107.2,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"not_null_stg_lineitem_extended_price\", \"status\": \"fail\", \"failing_rows\": 29778, \"message\": \"Got 29778 results, configured to fail if != 0\"}], \"skipped_downstream\": 12}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(extended_price) AS not_null_extended_price, COUNT(*) - COUNT(extended_price) AS null_extended_price FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"extended_price\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    case when l_returnflag = 'N' then l_extendedprice end as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) a"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_lineitem.sql",
+        "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_lineitem",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_lineitem.sql",
+        "evidence": "The not_null_stg_lineitem_extended_price test failed (29,778 nulls). The model used a CASE that set extended_price to NULL when l_returnflag <> 'N', causing the failure. Changing to direct l_extendedprice eliminates unintended NULLs. try_patch confirmed all checks pass."
+      }
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "id": "inc062",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 22311
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 79.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_orders model's contract expects order_date as DATE but the model is producing VARCHAR, causing a compilation error.",
+        "suspects": [
+          "models/staging/stg_orders.sql (column definition for order_date)",
+          "source raw.orders (raw data type for order_date)",
+          "schema.yml contract for stg_orders (expected column types)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM information_schema.tables WHERE table_schema='staging' AND table_name='stg_orders'"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"table_type\", \"self_referencing_column_name\", \"reference_generation\", \"user_defined_type_catalog\", \"user_defined_type_schema\", \"user_defined_type_name\", \"is_insertable_into\", \"is_typed\", \"commit_action\", \"TABLE_COMMENT\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='staging' AND table_name='stg_orders'"
+      },
+      "result": "{\"columns\": [\"column_name\", \"data_type\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.orders",
+        "column": "o_orderdate"
+      },
+      "result": "{\"column\": \"raw.orders.o_orderdate\", \"current_type\": \"varchar\", \"target_type\": \"date\", \"rows\": 15000, \"nulls\": 0, \"contract\": \"stg_orders.order_date is contracted as date\", \"formats_that_parse\": {\"%Y-%m-%d\": 14400}, \"best_format\": \"%Y-%m-%d\", \"convertible\": 14400, \"fail_to_convert\": 600, \"examples_that_fail\": [\"unknown\"], \"lossless\": false, \"issues\": [\"600 values do not convert to date\"], \"conversion\": null}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": "o_orderdate",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "The stg_orders model selects o_orderdate (VARCHAR) directly as order_date, but its contract expects DATE. profile_column on raw.orders.o_orderdate shows 600 values cannot be converted to DATE (lossless: false). The model's SQL does not convert the column, causing a contract type mismatch error. Since conversion would be lossy, the issue must be fixed at the source; the staging model cannot safely patch it."
+      }
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "id": "inc031",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 34156
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    distinct o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "The unique_stg_orders_order_key test failed with 300 duplicate rows. raw.orders contains duplicate o_orderkey values (e.g., order_key 800 appears twice with identical column values). Adding DISTINCT in stg_orders removes these duplicate rows, making order_key unique and allowing the test to pass.",
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 269.6,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_stg_orders_order_key\", \"status\": \"fail\", \"failing_rows\": 300, \"message\": \"Got 300 results, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT order_key) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT o_orderkey) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"15300\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT o_orderkey, COUNT(*) AS cnt FROM raw.orders GROUP BY o_orderkey HAVING COUNT(*) > 1 LIMIT 10"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"cnt\"], \"rows\": [[\"2979\", \"2\"], [\"14400\", \"2\"], [\"19300\", \"2\"], [\"27779\", \"2\"], [\"31200\", \"2\"], [\"33479\", \"2\"], [\"36000\", \"2\"], [\"38279\", \"2\"], [\"40579\", \"2\"], [\"41700\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.orders WHERE o_orderkey = 2979 ORDER BY _loaded_at"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"o_custkey\", \"o_orderstatus\", \"o_totalprice\", \"o_orderdate\", \"o_orderpriority\", \"o_clerk\", \"o_shippriority\", \"o_comment\", \"_loaded_at\"], \"rows\": [[\"2979\", \"1330\", \"O\", \"159392.83\", \"1996-03-23\", \"3-MEDIUM\", \"Clerk#000000820\", \"0\", \"ously. carefully regular packa\", \"1996-03-24 00:00:00\"], [\"2979\", \"1330\", \"O\", \"159392.83\", \"1996-03-23\", \"3-MEDIUM\", \"Clerk#000000820\", \"0\", \"ously. carefully regular packa\", \"1996-03-24 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT o_orderkey, COUNT(*) AS cnt FROM raw.orders GROUP BY o_orderkey HAVING COUNT(*) > 1 LIMIT 5"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"cnt\"], \"rows\": [[\"800\", \"2\"], [\"2279\", \"2\"], [\"5700\", \"2\"], [\"7779\", \"2\"], [\"10979\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.orders WHERE o_orderkey = 800 ORDER BY _loaded_at"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"o_custkey\", \"o_orderstatus\", \"o_totalprice\", \"o_orderdate\", \"o_orderpriority\", \"o_clerk\", \"o_shippriority\", \"o_comment\", \"_loaded_at\"], \"rows\": [[\"800\", \"560\", \"O\", \"144932.63\", \"1998-07-14\", \"2-HIGH\", \"Clerk#000000213\", \"0\", \"eas thrash blithely at the carefully pending accounts. furiously final r\", \"1998-07-15 00:00:00\"], [\"800\", \"560\", \"O\", \"144932.63\", \"1998-07-14\", \"2-HIGH\", \"Clerk#000000213\", \"0\", \"eas thrash blithely at the carefully pending accounts. furiously"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_orders.sql",
+        "sql": "select\n    distinct o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "file": "models/staging/stg_orders.sql",
+        "evidence": "The unique_stg_orders_order_key test failed with 300 duplicate rows. raw.orders contains duplicate o_orderkey values (e.g., order_key 800 appears twice with identical column values). Adding DISTINCT in stg_orders removes these duplicate rows, making order_key unique and allowing the test to pass."
+      }
+    }
+  ]
+}

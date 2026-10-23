@@ -1,0 +1,88 @@
+{
+  "id": "inc016",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_mktsegment",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 17131
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 83.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"not_null_stg_customers_market_segment\", \"status\": \"fail\", \"failing_rows\": 375, \"message\": \"Got 375 results, configured to fail if != 0\"}], \"skipped_downstream\": 14}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(market_segment) AS non_null_market_segment FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"market_segment\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, SUM(CASE WHEN c_mktsegment IS NULL THEN 1 ELSE 0 END) AS null_market_segment FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"null_market_segment\"], \"rows\": [[\"1500\", \"375\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The not_null test on stg_customers.market_segment failed with 375 rows. The raw source table raw.customer contains 1500 rows, of which 375 have NULL in c_mktsegment. The staging model stg_customers simply selects c_mktsegment as market_segment without any transformation, so the nulls are directly propagated. Since the problem originates in the raw source data, the incident is due to upstream data and must be escalated to the source owner."
+      }
+    }
+  ]
+}

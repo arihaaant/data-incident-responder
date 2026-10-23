@@ -1,0 +1,100 @@
+{
+  "id": "inc011",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 20690
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    cast(l_extendedprice as decimal(15,2)) as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    cast(l_extendedprice as decimal(15,2)) * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n",
+    "explanation": "The stg_lineitem model failed due to a type mismatch: l_extendedprice is VARCHAR, causing a binder error when multiplied by a DECIMAL discount. Profile shows lossless conversion to DECIMAL(15,2). Casting l_extendedprice to decimal resolves the error, and the patched model passes all checks.",
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 259.0,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Runtime Error in model stg_lineitem (models/staging/stg_lineitem.sql)\\n  Binder Error: No function matches the given name and argument types '*(VARCHAR, DECIMAL(16,2))'. You might need to add explicit type casts.\\n  \\tCandidate functions:\\n  \\t*(TINYINT, TINYINT) -> TINYINT\\n  \\t*(SMALLINT, SMALLINT) -> SMALLINT\\n  \\t*(INTEGER, INTEGER) -> INTEGER\\n  \\t*(BIGINT, BIGINT) -> BIGINT\\n  \\"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice VARCHAR\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdat"
+    },
+    {
+      "agent": "single",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.lineitem",
+        "column": "l_extendedprice"
+      },
+      "result": "{\"column\": \"raw.lineitem.l_extendedprice\", \"current_type\": \"varchar\", \"target_type\": \"decimal(15,2)\", \"rows\": 60175, \"nulls\": 0, \"contract\": \"stg_lineitem.extended_price is contracted as decimal(15,2)\", \"convertible\": 60175, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"2\": 60175}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.954, \"lossless\": true, \"issues\": [], \"conversion\": \"cast(l_extendedprice as decimal(15,2))\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_lineitem.sql",
+        "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    cast(l_extendedprice as decimal(15,2)) as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    cast(l_extendedprice as decimal(15,2)) * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_lineitem",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_lineitem.sql",
+        "evidence": "The stg_lineitem model failed due to a type mismatch: l_extendedprice is VARCHAR, causing a binder error when multiplied by a DECIMAL discount. Profile shows lossless conversion to DECIMAL(15,2). Casting l_extendedprice to decimal resolves the error, and the patched model passes all checks."
+      }
+    }
+  ]
+}

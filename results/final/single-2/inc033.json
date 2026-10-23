@@ -1,0 +1,115 @@
+{
+  "id": "inc033",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 25941
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    distinct o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "The unique_stg_orders_order_key test failed with 3000 duplicate rows. Raw.orders contains duplicate rows for the same o_orderkey (e.g., orderkey 32 appears twice with identical column values). The staging model stg_orders selects rows directly, propagating duplicates. Since the duplicate rows are identical, policy allows deduplication in the staging model. Applying SELECT DISTINCT removes the duplicates, and try_patch confirms all tests now pass.",
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 161.5,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_stg_orders_order_key\", \"status\": \"fail\", \"failing_rows\": 3000, \"message\": \"Got 3000 results, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"18000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT o_orderkey) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"18000\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT o_orderkey, COUNT(*) AS cnt, COUNT(DISTINCT o_custkey) AS cust_dist, COUNT(DISTINCT o_orderstatus) AS status_dist, COUNT(DISTINCT o_totalprice) AS price_dist, COUNT(DISTINCT o_orderdate) AS date_dist, COUNT(DISTINCT o_orderpriority) AS prio_dist FROM raw.orders GROUP BY o_orderkey HAVING COUNT(*) > 1"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"cnt\", \"cust_dist\", \"status_dist\", \"price_dist\", \"date_dist\", \"prio_dist\"], \"rows\": [[\"32\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"164\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"837\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1090\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1185\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1379\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1600\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1700\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1701\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"3200\", \"2\", \"1\", \"1\", \"1\", \"1\""
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_orders.sql",
+        "sql": "select\n    distinct o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.orders WHERE o_orderkey = 32"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"o_custkey\", \"o_orderstatus\", \"o_totalprice\", \"o_orderdate\", \"o_orderpriority\", \"o_clerk\", \"o_shippriority\", \"o_comment\", \"_loaded_at\"], \"rows\": [[\"32\", \"1301\", \"O\", \"198665.57\", \"1995-07-16\", \"2-HIGH\", \"Clerk#000000616\", \"0\", \"ly about the carefully express theodolites. ironic, iron\", \"1995-07-17 00:00:00\"], [\"32\", \"1301\", \"O\", \"198665.57\", \"1995-07-16\", \"2-HIGH\", \"Clerk#000000616\", \"0\", \"ly about the carefully express theodolites. ironic, iron\", \"1995-07-17 00:00:00\""
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "file": "models/staging/stg_orders.sql",
+        "evidence": "The unique_stg_orders_order_key test failed with 3000 duplicate rows. Raw.orders contains duplicate rows for the same o_orderkey (e.g., orderkey 32 appears twice with identical column values). The staging model stg_orders selects rows directly, propagating duplicates. Since the duplicate rows are identical, policy allows deduplication in the staging model. Applying SELECT DISTINCT removes the duplicates, and try_patch confirms all tests now pass."
+      }
+    }
+  ]
+}

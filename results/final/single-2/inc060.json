@@ -1,0 +1,168 @@
+{
+  "id": "inc060",
+  "kind": "late_data",
+  "split": "holdout",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "unknown",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 46841
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": false,
+    "resolved": false
+  },
+  "seconds": 177.0,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}, {\"node\": \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"status\": \"fail\", \"failing_rows\": 230, \"message\": \"Got 230 results, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderdate < (select max(o_orderdate) from {{ source('raw', 'orders') }}) - interval 7 day\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select min(o_orderdate) as min_date, max(o_orderdate) as max_date, count(*) as total from raw.orders"
+      },
+      "result": "{\"columns\": [\"min_date\", \"max_date\", \"total\"], \"rows\": [[\"1992-01-01\", \"1998-08-02\", \"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as recent_orders\nfrom raw.orders, max_date\nwhere o_orderdate >= max_date.max_date - interval 7 day"
+      },
+      "result": "{\"columns\": [\"recent_orders\"], \"rows\": [[\"59\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as unexpected_recent\nfrom raw.orders, max_date\nwhere o_orderdate >= max_date.max_date - interval 7 day\nand o_orderdate < max_date.max_date"
+      },
+      "result": "{\"columns\": [\"unexpected_recent\"], \"rows\": [[\"52\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from stg_orders"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as cnt from staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"14941\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as recent_in_stg from staging.stg_orders, max_date\nwhere o_orderdate >= max_date.max_date - interval 7 day"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"o_orderdate\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as recent_in_stg from staging.stg_orders, max_date\nwhere order_date >= max_date.max_date - interval 7 day"
+      },
+      "result": "{\"columns\": [\"recent_in_stg\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select count(*) as null_dates from staging.stg_orders where order_date is null"
+      },
+      "result": "{\"columns\": [\"null_dates\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "select max(order_date) as max_stg from staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"max_stg\"], \"rows\": [[\"1998-07-25\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as eq_date from raw.orders, max_date\nwhere o_orderdate = max_date.max_date - interval 7 day"
+      },
+      "result": "{\"columns\": [\"eq_date\"], \"rows\": [[\"6\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "with max_date as (select max(o_orderdate) as max_date from raw.orders)\nselect count(*) as lineitems_recent\nfrom raw.lineitem li\njoin raw.orders o on li.l_orderkey = o.o_orderkey\nwhere o.o_orderdate >= max_date.max_date - interval 7 day"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced table \\\"max_date\\\" not found!\"}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "unknown",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The investigation did not reach a conclusion; handing over for manual review."
+      }
+    }
+  ]
+}

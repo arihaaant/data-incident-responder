@@ -1,0 +1,123 @@
+{
+  "id": "inc045",
+  "kind": "duplicates",
+  "split": "holdout",
+  "expected": {
+    "root_node": "model.stg_lineitem",
+    "root_column": "order_line_id",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 13371
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}",
+    "explanation": "Removed the erroneous UNION ALL that duplicated every row and added a filtered subset, which caused duplicate order_line_id values and broke the uniqueness check. The model now selects each lineitem exactly once, preserving the original column definitions and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\nunion all\nselect l_orderkey || '-' || l_linenumber, l_orderkey, l_linenumber, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_shipdate, l_extendedprice * (1 - l_discount)\nfrom {{ source('raw', 'lineitem') }}\nwhere l_returnflag = 'R'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 168.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on `stg_lineitem.order_line_id` failed with 14,902 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_lineitem model (the view that defines `order_line_id`)",
+          "raw.lineitem source table (upstream raw data may contain duplicates)",
+          "ETL job that populates `raw.lineitem` (could be inserting duplicate records or missing deduplication logic)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_line_id) AS distinct_ids FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_line_id\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_lineitem",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_lineitem model unions raw.lineitem with itself (all rows + rows where l_returnflag='R'), creating duplicate order_line_id values. Raw.lineitem has 60,175 rows and no order_line_id column; duplicates arise in staging. The uniqueness check on stg_lineitem.order_line_id reports 14,902 duplicate rows, matching the extra rows from the union. Fix by removing the UNION ALL or correcting intended logic."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_lineitem.sql",
+        "explanation": "Removed the erroneous UNION ALL that duplicated every row and added a filtered subset, which caused duplicate order_line_id values and broke the uniqueness check. The model now selects each lineitem exactly once, preserving the original column definitions and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes the erroneous UNION ALL that duplicated rows, eliminating duplicate order_line_id values and satisfying the uniqueness check. No masking or data loss; aligns with root cause."
+      }
+    }
+  ]
+}

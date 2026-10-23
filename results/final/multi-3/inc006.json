@@ -1,0 +1,114 @@
+{
+  "id": "inc006",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_nationkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 11922
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nation_key as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "The upstream raw.customer table renamed the column from c_nationkey to c_nation_key. The stg_customers model referenced the old name, causing a binder error. Updated the SELECT to use c_nation_key while preserving all other column mappings and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 168.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_customers references column `c_nationkey` which no longer exists in the source; the source now provides `c_nation_key`. This schema change broke the model compilation.",
+        "suspects": [
+          "source raw.customers (the upstream raw table)",
+          "model tpch_warehouse.stg_customers (the failing staging model)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nation_key INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rec"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "The raw.customer table has column c_nation_key, not c_nationkey. The stg_customers model selects c_nationkey, causing a binder error. This is a schema rename upstream; fixing by updating the model to use c_nation_key patches the issue."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The upstream raw.customer table renamed the column from c_nationkey to c_nation_key. The stg_customers model referenced the old name, causing a binder error. Updated the SELECT to use c_nation_key while preserving all other column mappings and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates the model to use the renamed column c_nation_key, addressing the binder error. No type/format conversion involved, so lack of column profile is acceptable."
+      }
+    }
+  ]
+}

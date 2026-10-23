@@ -1,0 +1,147 @@
+{
+  "id": "inc042",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.dim_customers",
+    "root_column": "customer_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.dim_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 18424
+  },
+  "patch": {
+    "file": "models/marts/dim_customers.sql",
+    "sql": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key",
+    "explanation": "Fixed the join condition for the regions table. The original query incorrectly joined `stg_regions` on `n.region_key = n.region_key`, which is always true and caused a Cartesian product, inflating rows in `dim_customers`. Updated the condition to correctly match `n.region_key` to `r.region_key`, eliminating duplicate rows and allowing the unique_customer_key test to pass.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\njoin {{ ref('stg_regions') }} r on n.region_key = n.region_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 211.2,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on dim_customers.customer_key failed with 1500 duplicate rows, indicating duplicate primary key values in the customers dimension.",
+        "suspects": [
+          "stg_customers (staging model for raw.customers)",
+          "raw.customers source table",
+          "dim_customers (marts model) if it performs transformations that could introduce duplicates"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.dim_customers\", \"upstream\": [\"stg_customers\", \"stg_nations\", \"stg_regions\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_dim_customers_region_name__AFRICA__AMERICA__ASIA__EUROPE__MIDDLE_EAST\", \"not_null_dim_customers_customer_key\", \"not_null_dim_customers_region_name\", \"unique_dim_customers_customer_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"7500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.customers"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name customers does not exist!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"path\": \"models/marts/dim_customers.sql\", \"sql\": \"select\\n    c.customer_key,\\n    c.customer_name,\\n    c.market_segment,\\n    c.account_balance,\\n    n.nation_name,\\n    r.region_name\\nfrom {{ ref('stg_customers') }} c\\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\\njoin {{ ref('stg_regions') }} r on n.region_key = n.region_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_nations"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"25\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_nations"
+      },
+      "result": "{\"path\": \"models/staging/stg_nations.sql\", \"sql\": \"select\\n    n_nationkey as nation_key,\\n    n_name as nation_name,\\n    n_regionkey as region_key\\nfrom {{ source('raw', 'nation') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.dim_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_customers has 1500 rows, dim_customers has 7500 rows (5x). Join in dim_customers uses n.region_key = n.region_key, causing each customer to duplicate for each region. Fix join to n.region_key = r.region_key."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/dim_customers.sql",
+        "explanation": "Fixed the join condition for the regions table. The original query incorrectly joined `stg_regions` on `n.region_key = n.region_key`, which is always true and caused a Cartesian product, inflating rows in `dim_customers`. Updated the condition to correctly match `n.region_key` to `r.region_key`, eliminating duplicate rows and allowing the unique_customer_key test to pass.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix corrects the erroneous join condition causing row duplication. It addresses the root cause without masking data or altering column values."
+      }
+    }
+  ]
+}

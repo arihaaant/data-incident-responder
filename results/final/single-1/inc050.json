@@ -1,0 +1,160 @@
+{
+  "id": "inc050",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 51432
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 183.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0) as gross_re"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) as cnt, min(order_date) as min_date, max(order_date) as max_date FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_date\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) as cnt, max(loaded_at) as max_loaded, min(order_date) as min_date, max(order_date) as max_date FROM marts.fct_orders"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name fct_orders does not exist!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) as cnt FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"14920\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "raw.orders"
+      },
+      "result": "{\"node\": \"source.tpch_warehouse.raw.orders\", \"upstream\": [], \"downstream\": [\"stg_orders\"], \"checks\": []}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders WHERE loaded_at IS NULL OR order_date IS NULL LIMIT 10"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT max(loaded_at) as max_loaded, min(loaded_at) as min_loaded FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"max_loaded\", \"min_loaded\"], \"rows\": [[\"1998-07-23 00:00:00\", \"1992-01-02 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders ORDER BY loaded_at DESC LIMIT 1"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [[\"17955\", \"1060\", \"O\", \"149531.93\", \"1998-07-22\", \"5-LOW\", \"1998-07-23 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT max(_loaded_at) as max_loaded, min(_loaded_at) as min_loaded FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"max_loaded\", \"min_loaded\"], \"rows\": [[\"1998-07-23 00:00:00\", \"1992-01-02 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": null,
+        "evidence": "The raw.orders table defines the date column as o_orderdate, but downstream checks reference order_date. The stg_orders model likely selects order_date directly, causing missing values or mismatched column names. However the check not_null_stg_orders_order_date passes, indicating the model may have aliased correctly. The real issue is the failing check (not provided) likely about order_date freshness. The raw.orders _loaded_at aligns with stg_orders loaded_at, but the order_date column exists in stg_orders with no nulls. The root cause appears to be a code change in stg_orders model that mis-mapped the column name, leading to downstream failures in fct_orders. Therefore patch stg_orders to correctly map o_orderdate to order_date."
+      }
+    }
+  ]
+}

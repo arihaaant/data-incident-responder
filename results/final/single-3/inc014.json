@@ -1,0 +1,99 @@
+{
+  "id": "inc014",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_brand",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_parts",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 16656
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand_name as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n",
+    "explanation": "The failing test reported a Binder Error: column `p_brand` not found in the FROM clause. The raw `part` table contains `p_brand_name` (not `p_brand`). The model `stg_parts` incorrectly referenced `p_brand`. Updating the SELECT to use `p_brand_name` fixes the runtime error and all downstream checks now pass.",
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 214.4,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_parts\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Runtime Error in model stg_parts (models/staging/stg_parts.sql)\\n  Binder Error: Referenced column \\\"p_brand\\\" not found in FROM clause!\\n  Candidate bindings: \\\"p_brand_name\\\", \\\"p_name\\\", \\\"p_mfgr\\\", \\\"p_retailprice\\\", \\\"p_partkey\\\"\\n  \\n  LINE 6:     p_brand as brand,\\n              ^\"}], \"skipped_downstream\": 14}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_parts"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_parts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "tpch_warehouse.stg_parts"
+      },
+      "result": "{\"error\": \"no model called tpch_warehouse.stg_parts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"path\": \"models/staging/stg_parts.sql\", \"sql\": \"select\\n    p_partkey as part_key,\\n    p_name as part_name,\\n    p_brand as brand,\\n    p_type as part_type,\\n    p_retailprice as retail_price\\nfrom {{ source('raw', 'part') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_parts.sql",
+        "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand_name as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_parts",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_parts.sql",
+        "evidence": "The failing test reported a Binder Error: column `p_brand` not found in the FROM clause. The raw `part` table contains `p_brand_name` (not `p_brand`). The model `stg_parts` incorrectly referenced `p_brand`. Updating the SELECT to use `p_brand_name` fixes the runtime error and all downstream checks now pass."
+      }
+    }
+  ]
+}

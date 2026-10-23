@@ -1,0 +1,147 @@
+{
+  "id": "inc037",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 25611
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    distinct c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n",
+    "explanation": "The raw.customer source contains 75 duplicate rows where the primary key c_custkey is repeated with identical column values. The staging model previously selected rows directly, causing the unique check on customer_key to fail. Since the duplicates are exact copies of a redelivered batch, we can safely deduplicate by using SELECT DISTINCT on all columns. This preserves the original column names and data types while ensuring each customer_key appears only once, allowing the uniqueness test to pass.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 195.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on `stg_customers.customer_key` found 75 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_customers model (SQL logic that defines `customer_key`)",
+          "raw.customers source table (incoming data may contain duplicate keys)",
+          "any upstream transformations or incremental loads that append without deduplication"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"customer_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"1575\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt, COUNT(DISTINCT c_name) AS name_dist, COUNT(DISTINCT c_address) AS addr_dist, COUNT(DISTINCT c_phone) AS phone_dist, COUNT(DISTINCT c_nationkey) AS nation_dist, COUNT(DISTINCT c_mktsegment) AS seg_dist, COUNT(DISTINCT c_acctbal) AS bal_dist FROM raw.customer GROUP BY c_custkey HAVING COUNT(*) > 1"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"cnt\", \"name_dist\", \"addr_dist\", \"phone_dist\", \"nation_dist\", \"seg_dist\", \"bal_dist\"], \"rows\": [[\"458\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"558\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"716\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"916\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1258\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"300\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1300\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1437\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"137\", \"2\", \"1\", \"1\", "
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 458"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"458\", \"***\", \"***\", \"4\", \"***\", \"-38.42\", \"BUILDING\", \"usual, silent requests against the pack\"], [\"458\", \"***\", \"***\", \"4\", \"***\", \"-38.42\", \"BUILDING\", \"usual, silent requests against the pack\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS dup_rows FROM raw.customer c1 JOIN raw.customer c2 ON c1.c_custkey = c2.c_custkey AND c1.rowid <> c2.rowid WHERE c1.c_name <> c2.c_name OR c1.c_address <> c2.c_address OR c1.c_phone <> c2.c_phone OR c1.c_nationkey <> c2.c_nationkey OR c1.c_acctbal <> c2.c_acctbal OR c1.c_mktsegment <> c2.c_mktsegment"
+      },
+      "result": "{\"columns\": [\"dup_rows\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.customer has 1575 rows but only 1500 distinct c_custkey values, indicating 75 duplicate primary key rows. The duplicate rows are identical across all columns, confirming a duplicated batch. The staging model simply selects columns without deduplication, so the uniqueness check fails on stg_customers.customer_key."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The raw.customer source contains 75 duplicate rows where the primary key c_custkey is repeated with identical column values. The staging model previously selected rows directly, causing the unique check on customer_key to fail. Since the duplicates are exact copies of a redelivered batch, we can safely deduplicate by using SELECT DISTINCT on all columns. This preserves the original column names and data types while ensuring each customer_key appears only once, allowing the uniqueness test to pass.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly removes the exact duplicate primary key rows by selecting distinct customer_key, addressing the upstream duplicate batch without masking or altering data."
+      }
+    }
+  ]
+}

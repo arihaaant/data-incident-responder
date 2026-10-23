@@ -1,0 +1,171 @@
+{
+  "id": "inc058",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 41563
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "raw.orders has 15000 rows, but staging.stg_orders only has 7667 rows because the model filters out rows where o_orderstatus = 'O'. The failing check expects all orders to be present, indicating the filter is unintended. Removing the WHERE clause restores the full row count.",
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderstatus <> 'O'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 170.6,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}, {\"node\": \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"status\": \"fail\", \"failing_rows\": 29165, \"message\": \"Got 29165 results, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderstatus <> 'O'\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM stg_orders"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"7667\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders LIMIT 5"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [[\"3\", \"1234\", \"F\", \"205654.30\", \"1993-10-14\", \"5-LOW\", \"1993-10-15 00:00:00\"], [\"5\", \"445\", \"F\", \"105367.67\", \"1994-07-30\", \"5-LOW\", \"1994-07-31 00:00:00\"], [\"6\", \"557\", \"F\", \"45523.10\", \"1992-02-21\", \"4-NOT SPECIFIED\", \"1992-02-22 00:00:00\"], [\"33\", \"670\", \"F\", \"146567.24\", \"1993-10-27\", \"3-MEDIUM\", \"1993-10-28 00:00:00\"], [\"37\", \"862\", \"F\", \"131896.49\", \"1992-06-03\", \"3-MED"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT l_orderkey) AS cnt FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_orders.sql",
+        "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM raw.orders WHERE o_orderstatus <> 'O'"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"7667\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_orders.sql",
+        "evidence": "raw.orders has 15000 rows, but staging.stg_orders only has 7667 rows because the model filters out rows where o_orderstatus = 'O'. The failing check expects all orders to be present, indicating the filter is unintended. Removing the WHERE clause restores the full row count."
+      }
+    }
+  ]
+}

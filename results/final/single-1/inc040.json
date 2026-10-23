@@ -1,0 +1,91 @@
+{
+  "id": "inc040",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.fct_orders",
+    "root_column": "order_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.fct_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 15416
+  },
+  "patch": {
+    "file": "models/marts/fct_orders.sql",
+    "sql": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key",
+    "explanation": "The unique_fct_orders_order_key test failed with 12,900 duplicate order_key rows. In fct_orders, the items CTE grouped by order_key and line_number, producing multiple rows per order_key (one per line item). The subsequent left join on order_key duplicated the order rows, violating uniqueness. Removing line_number from the GROUP BY aggregates items per order_key, ensuring a single row per order_key and making the uniqueness test pass.",
+    "original": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key, line_number\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 199.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_fct_orders_order_key\", \"status\": \"fail\", \"failing_rows\": 12900, \"message\": \"Got 12900 results, configured to fail if != 0\"}], \"skipped_downstream\": 3}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT 'stg_orders' as tbl, COUNT(*) as cnt FROM staging.stg_orders UNION ALL SELECT 'dim_customers', COUNT(*) FROM marts.dim_customers UNION ALL SELECT 'fct_order_items', COUNT(*) FROM marts.fct_order_items"
+      },
+      "result": "{\"columns\": [\"tbl\", \"cnt\"], \"rows\": [[\"stg_orders\", \"15000\"], [\"dim_customers\", \"1500\"], [\"fct_order_items\", \"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key, line_number\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/marts/fct_orders.sql",
+        "sql": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.fct_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/marts/fct_orders.sql",
+        "evidence": "The unique_fct_orders_order_key test failed with 12,900 duplicate order_key rows. In fct_orders, the items CTE grouped by order_key and line_number, producing multiple rows per order_key (one per line item). The subsequent left join on order_key duplicated the order rows, violating uniqueness. Removing line_number from the GROUP BY aggregates items per order_key, ensuring a single row per order_key and making the uniqueness test pass."
+      }
+    }
+  ]
+}

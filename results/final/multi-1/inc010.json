@@ -1,0 +1,124 @@
+{
+  "id": "inc010",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_discount",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 18125
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    cast(l_discount as decimal(15,2)) as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - cast(l_discount as decimal(15,2))) as net_revenue\nfrom {{ source('raw', 'lineitem') }}",
+    "explanation": "The source column `l_discount` is VARCHAR but the staging model expects decimal(15,2). The column profile confirms a lossless conversion. Cast `l_discount` to decimal(15,2) both for the `discount` field and in the `net_revenue` calculation to resolve the type mismatch causing the compile error.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 219.3,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "stg_lineitem fails at compile time because a subtraction expression is trying to subtract a VARCHAR from an INTEGER literal, indicating a column's data type changed (e.g., a numeric column became string) in the raw lineitem source.",
+        "suspects": [
+          "source raw.lineitem (column used in the subtraction)",
+          "models/staging/stg_lineitem.sql (the expression around line 15)",
+          "any upstream transformation or source definition that casts the column"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount VARCHAR\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdat"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.lineitem",
+        "column": "l_discount"
+      },
+      "result": "{\"column\": \"raw.lineitem.l_discount\", \"current_type\": \"varchar\", \"target_type\": \"decimal(15,2)\", \"rows\": 60175, \"nulls\": 0, \"contract\": \"stg_lineitem.discount is contracted as decimal(15,2)\", \"convertible\": 60175, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"2\": 60175}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.9099, \"lossless\": true, \"issues\": [], \"conversion\": \"cast(l_discount as decimal(15,2))\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": "l_discount",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "stg_lineitem model fails compile at line 15 due to subtraction 1 - l_discount where l_discount is VARCHAR. raw.lineitem schema shows l_discount as VARCHAR, while staging contract expects decimal(15,2). profile_column shows conversion to decimal is lossless. Therefore patch stg_lineitem to cast l_discount to decimal."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_lineitem.sql",
+        "explanation": "The source column `l_discount` is VARCHAR but the staging model expects decimal(15,2). The column profile confirms a lossless conversion. Cast `l_discount` to decimal(15,2) both for the `discount` field and in the `net_revenue` calculation to resolve the type mismatch causing the compile error.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Patch correctly casts l_discount to decimal(15,2) per lossless profile, fixing type mismatch without data loss or masking."
+      }
+    }
+  ]
+}

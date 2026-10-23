@@ -1,0 +1,155 @@
+{
+  "id": "inc039",
+  "kind": "duplicates",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_partkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": "p_partkey",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 28612
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select\n    distinct\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}",
+    "explanation": "The raw `part` source contains 200 exact duplicate rows (same values for all columns). The staging model `stg_parts` previously selected rows directly, allowing duplicates to flow downstream and causing the `unique_stg_parts_part_key` check to fail. Adding `DISTINCT` removes these exact duplicate rows while preserving the original column names and data types, satisfying the uniqueness check without altering any other logic.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 220.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_parts.part_key failed with 200 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_parts model (staging schema)",
+          "raw.parts source table (raw schema)",
+          "any upstream ETL job that loads raw.parts"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_parts\", \"upstream\": [\"raw.part\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"not_null_stg_parts_part_key\", \"unique_stg_parts_part_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.part"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"2200\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT part_key) AS distinct_keys FROM raw.part"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"part_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT p_partkey) AS distinct_keys FROM raw.part"
+      },
+      "result": "{\"columns\": [\"distinct_keys\"], \"rows\": [[\"2000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_mfgr) AS mfgr_cnt FROM raw.part GROUP BY p_partkey HAVING COUNT(*) > 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\", \"name_cnt\", \"mfgr_cnt\"], \"rows\": [[\"300\", \"2\", \"1\", \"1\"], [\"632\", \"2\", \"1\", \"1\"], [\"674\", \"2\", \"1\", \"1\"], [\"753\", \"2\", \"1\", \"1\"], [\"1300\", \"2\", \"1\", \"1\"], [\"1437\", \"2\", \"1\", \"1\"], [\"1637\", \"2\", \"1\", \"1\"], [\"1779\", \"2\", \"1\", \"1\"], [\"1832\", \"2\", \"1\", \"1\"], [\"1979\", \"2\", \"1\", \"1\"], [\"11\", \"2\", \"1\", \"1\"], [\"132\", \"2\", \"1\", \"1\"], [\"600\", \"2\", \"1\", \"1\"], [\"1416\", \"2\", \"1\", \"1\"], [\"1500\", \"2\", \"1\", \"1\"], [\"1795\", \"2\", \"1\", \"1\"], [\"1816\", \"2\", \"1\", \"1\"], [\"116\", \"2\", \"1\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"path\": \"models/staging/stg_parts.sql\", \"sql\": \"select\\n    p_partkey as part_key,\\n    p_name as part_name,\\n    p_brand as brand,\\n    p_type as part_type,\\n    p_retailprice as retail_price\\nfrom {{ source('raw', 'part') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_mfgr) AS mfgr_cnt, COUNT(DISTINCT p_brand) AS brand_cnt, COUNT(DISTINCT p_type) AS type_cnt, COUNT(DISTINCT p_retailprice) AS price_cnt, COUNT(DISTINCT p_comment) AS comment_cnt FROM raw.part GROUP BY p_partkey HAVING cnt > 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\", \"name_cnt\", \"mfgr_cnt\", \"brand_cnt\", \"type_cnt\", \"price_cnt\", \"comment_cnt\"], \"rows\": [[\"379\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"495\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"553\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1095\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1211\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1674\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1732\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"100\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"253\", \"2\", \"1\", \"1\", \""
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.part",
+        "root_column": "p_partkey",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.part has 2200 rows but only 2000 distinct p_partkey values, indicating 200 duplicate primary key rows. Query grouping by p_partkey shows each duplicate has identical values across all columns (name_cnt, mfgr_cnt, brand_cnt, type_cnt, price_cnt, comment_cnt all = 1). The stg_parts model selects p_partkey as part_key without deduplication, so duplicates flow downstream, causing the unique_stg_parts_part_key check to fail with 200 rows. Duplicates are exact copies, so per policy they should be deduplicated in the staging model (patch)."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_parts.sql",
+        "explanation": "Added a comment and SELECT DISTINCT logic (via SELECT DISTINCT on the entire result set) to remove the 200 exact duplicate rows in raw.part. This resolves the unique_stg_parts_part_key check failure while preserving column names and types.",
+        "dry_run_passes": false
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_parts.sql",
+        "explanation": "The raw `part` source contains 200 exact duplicate rows (same values for all columns). The staging model `stg_parts` previously selected rows directly, allowing duplicates to flow downstream and causing the `unique_stg_parts_part_key` check to fail. Adding `DISTINCT` removes these exact duplicate rows while preserving the original column names and data types, satisfying the uniqueness check without altering any other logic.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Patch correctly deduplicates exact duplicate rows using DISTINCT, addressing the root cause without masking data or altering logic."
+      }
+    }
+  ]
+}

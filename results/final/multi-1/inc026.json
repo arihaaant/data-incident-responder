@@ -1,0 +1,131 @@
+{
+  "id": "inc026",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_lineitem",
+    "root_column": "extended_price",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_lineitem",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 20193
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}",
+    "explanation": "The not_null test on `extended_price` failed because the model only populated this column when `l_returnflag = 'N'`, resulting in nulls for other rows. Since the source `l_extendedprice` is never null, we can safely assign it directly to `extended_price` for all rows, satisfying the not_null constraint while preserving the original data type.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    case when l_returnflag = 'N' then l_extendedprice end as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 121.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on stg_lineitem_extended_price failed with 29,778 null values, indicating a sudden influx of missing extended_price data.",
+        "suspects": [
+          "source raw.lineitem (especially the EXTENDEDPRICE field)",
+          "stg_lineitem model (transformation logic that populates extended_price)",
+          "any recent changes to the ingestion pipeline or schema that could affect the column"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(extendedprice) AS non_null_extendedprice, COUNT(*) - COUNT(extendedprice) AS null_extendedprice FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"extendedprice\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    case when l_returnflag = 'N' then l_extendedprice end as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) a"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows,\n       SUM(CASE WHEN l_returnflag <> 'N' THEN 1 ELSE 0 END) AS non_N_rows,\n       SUM(CASE WHEN l_returnflag = 'N' THEN 1 ELSE 0 END) AS N_rows\nFROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_N_rows\", \"N_rows\"], \"rows\": [[\"60175\", \"29778\", \"30397\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows,\n       COUNT(extended_price) AS non_null_extended_price,\n       COUNT(*) - COUNT(extended_price) AS null_extended_price\nFROM staging.stg_lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"non_null_extended_price\", \"null_extended_price\"], \"rows\": [[\"60175\", \"30397\", \"29778\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_lineitem",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "The not_null test on stg_lineitem_extended_price failed with 29,778 nulls. Raw.lineitem has 29,778 rows where l_returnflag <> 'N', and l_extendedprice is never null. The stg_lineitem model sets extended_price only when l_returnflag = 'N', causing nulls for the other rows. Row counts match upstream, so the problem is the model's conditional logic, not source data. Patch the model to populate extended_price for all rows (or adjust the test)."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_lineitem.sql",
+        "explanation": "The not_null test on `extended_price` failed because the model only populated this column when `l_returnflag = 'N'`, resulting in nulls for other rows. Since the source `l_extendedprice` is never null, we can safely assign it directly to `extended_price` for all rows, satisfying the not_null constraint while preserving the original data type.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes conditional that introduced nulls and correctly maps source l_extendedprice to extended_price for all rows, addressing the root cause without masking data."
+      }
+    }
+  ]
+}

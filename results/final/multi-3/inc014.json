@@ -1,0 +1,114 @@
+{
+  "id": "inc014",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_brand",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 13828
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand_name as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}",
+    "explanation": "The source schema changed: column `p_brand` was renamed to `p_brand_name`. The staging model `stg_parts` still referenced the old name, causing a binder error. Updated the SELECT to use `p_brand_name` while preserving the original output column name `brand` and keeping all other column mappings unchanged.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 194.1,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_parts fails because the source column `p_brand` no longer exists in the raw parts table; only `p_brand_name` is present.",
+        "suspects": [
+          "source raw.parts (schema change)",
+          "staging model models/staging/stg_parts.sql (column reference)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_parts"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_parts\", \"upstream\": [\"raw.part\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"not_null_stg_parts_part_key\", \"unique_stg_parts_part_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_parts"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_parts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"path\": \"models/staging/stg_parts.sql\", \"sql\": \"select\\n    p_partkey as part_key,\\n    p_name as part_name,\\n    p_brand as brand,\\n    p_type as part_type,\\n    p_retailprice as retail_price\\nfrom {{ source('raw', 'part') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.part",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.part columns: p_partkey, p_name, p_mfgr, p_brand_name, p_type, p_size, p_container, p_retailprice, p_comment. stg_parts model selects p_brand which no longer exists, causing binder error. The source schema changed (p_brand renamed to p_brand_name). The fix is to patch the staging model to use p_brand_name."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_parts.sql",
+        "explanation": "The source schema changed: column `p_brand` was renamed to `p_brand_name`. The staging model `stg_parts` still referenced the old name, causing a binder error. Updated the SELECT to use `p_brand_name` while preserving the original output column name `brand` and keeping all other column mappings unchanged.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates staging model to reference renamed source column p_brand_name, preserving output column name. No data masking or type conversion involved."
+      }
+    }
+  ]
+}

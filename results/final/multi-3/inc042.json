@@ -1,0 +1,195 @@
+{
+  "id": "inc042",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.dim_customers",
+    "root_column": "customer_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.dim_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 37754
+  },
+  "patch": {
+    "file": "models/marts/dim_customers.sql",
+    "sql": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key",
+    "explanation": "Fixed the join condition between stg_nations and stg_regions. The original query used `n.region_key = n.region_key`, which is always true and caused a cartesian product, duplicating each customer for every region. Updated to `n.region_key = r.region_key` to correctly join each nation to its region, eliminating duplicate rows and satisfying the unique customer_key check.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\njoin {{ ref('stg_regions') }} r on n.region_key = n.region_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 226.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on dim_customers.customer_key failed with 1500 duplicate rows, indicating duplicate primary key values in the customers dimension.",
+        "suspects": [
+          "stg_customers (staging view that cleans raw.customers)",
+          "raw.customers source table (possible duplicate records upstream)",
+          "dim_customers model (the final mart that aggregates/joins customer data)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "unique_dim_customers_customer_key"
+      },
+      "result": "{\"error\": \"unknown model or source unique_dim_customers_customer_key\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.dim_customers\", \"upstream\": [\"stg_customers\", \"stg_nations\", \"stg_regions\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_dim_customers_region_name__AFRICA__AMERICA__ASIA__EUROPE__MIDDLE_EAST\", \"not_null_dim_customers_customer_key\", \"not_null_dim_customers_region_name\", \"unique_dim_customers_customer_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM dim_customers"
+      },
+      "result": "{\"error\": \"refused: unknown table dim_customers, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "marts"
+      },
+      "result": "{\"marts.dim_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\", \"nation_name VARCHAR\", \"region_name VARCHAR\"], \"marts.fct_order_items\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"brand VARCHAR\", \"part_type VARCHAR\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"net_revenue DECIMAL(18,4)\", \"return_flag VARCHAR\", \"ship_date DATE\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customers"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name customers does not exist!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"1500\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM stg_customers"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_customers, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"7500\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"path\": \"models/marts/dim_customers.sql\", \"sql\": \"select\\n    c.customer_key,\\n    c.customer_name,\\n    c.market_segment,\\n    c.account_balance,\\n    n.nation_name,\\n    r.region_name\\nfrom {{ ref('stg_customers') }} c\\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\\njoin {{ ref('stg_regions') }} r on n.region_key = n.region_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_nations"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"25\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_regions"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"5\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.dim_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_customers has 1500 rows, distinct customer_key 1500; dim_customers has 7500 rows, distinct keys 1500, indicating each customer duplicated 5x. dim_customers SQL joins stg_regions with condition 'n.region_key = n.region_key' (always true), causing cartesian join with 5 region rows. Fix join to 'r.region_key = n.region_key' to eliminate duplication."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/dim_customers.sql",
+        "explanation": "Fixed the join condition between stg_nations and stg_regions. The original query used `n.region_key = n.region_key`, which is always true and caused a cartesian product, duplicating each customer for every region. Updated to `n.region_key = r.region_key` to correctly join each nation to its region, eliminating duplicate rows and satisfying the unique customer_key check.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix corrects the erroneous join condition (n.region_key = n.region_key) to proper key equality (n.region_key = r.region_key), removing the cartesian product that duplicated customers. Addresses root cause without masking data."
+      }
+    }
+  ]
+}

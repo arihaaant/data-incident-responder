@@ -1,0 +1,188 @@
+{
+  "id": "inc059",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 36457
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "Removed the 30\u2011day freshness filter that was incorrectly dropping recent orders. The model now selects all rows from the raw orders source, preserving column names and types, which resolves the missing order rows and the downstream relationship failures.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderdate < date '{{ var(\"as_of\") }}' - interval 30 day\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 167.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "Orders freshness test flagged a stale order, and 769 lineitem rows reference missing order keys, indicating orders data hasn't arrived or was delayed relative to lineitems.",
+        "suspects": [
+          "stg_orders model (and its source raw.orders)",
+          "upstream ETL that populates the orders table",
+          "load schedule ordering between raw.orders and raw.lineitem",
+          "any recent changes to the orders ingestion pipeline"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_key) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"14800\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT o_orderkey) AS distinct_keys FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"distinct_keys\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT o_orderkey) AS distinct_keys FROM staging.stg_orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"o_orderkey\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT l_orderkey) AS distinct_keys FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"distinct_keys\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderdate < date '{{ var(\\\"as_of\\\") }}' - interval 30 day\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT l.l_orderkey FROM raw.lineitem l LEFT JOIN staging.stg_orders o ON l.l_orderkey = o.order_key WHERE o.order_key IS NULL LIMIT 10"
+      },
+      "result": "{\"columns\": [\"l_orderkey\"], \"rows\": [[\"53125\"], [\"53125\"], [\"53125\"], [\"53125\"], [\"53125\"], [\"53217\"], [\"53217\"], [\"53217\"], [\"53217\"], [\"53253\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_orders filters out orders newer than 30 days (where o_orderdate < date '{{ var(\"as_of\") }}' - interval 30 day'), resulting in 200 missing orders (raw count 15000 vs stg count 14800) and 769 lineitem rows with missing order_key references; assert_orders_fresh also fails. The filter is the source of the problem."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "Removed the 30\u2011day freshness filter that was incorrectly dropping recent orders. The model now selects all rows from the raw orders source, preserving column names and types, which resolves the missing order rows and the downstream relationship failures.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes the erroneous 30\u2011day filter that caused missing recent orders and broken foreign key relationships. No data masking or type changes involved."
+      }
+    }
+  ]
+}

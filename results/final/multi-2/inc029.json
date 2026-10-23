@@ -1,0 +1,132 @@
+{
+  "id": "inc029",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 19161
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}",
+    "explanation": "The failing not_null check on stg_orders.order_date was caused by the original CASE expression that set order_date to NULL for rows where o_orderstatus = 'P'. Since the source raw.orders has no null order_date values, we can safely propagate the original order date for all rows. Replacing the CASE with a direct mapping to o_orderdate eliminates the introduced nulls while preserving the column type and all other columns unchanged.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    case when o_orderstatus <> 'P' then o_orderdate end as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 139.5,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on stg_orders.order_date failed with 363 null values, indicating a sudden influx of missing order dates.",
+        "suspects": [
+          "stg_orders model (transformation logic that populates order_date)",
+          "raw.orders source table (new files or schema changes causing missing order_date)",
+          "ETL job that loads raw.orders (e.g., CSV parsing, date parsing errors)",
+          "Upstream upstream system that may have stopped populating order_date"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, SUM(CASE WHEN order_date IS NULL THEN 1 ELSE 0 END) AS null_order_date FROM raw.orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_date\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    case when o_orderstatus <> 'P' then o_orderdate end as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, SUM(CASE WHEN o_orderstatus = 'P' THEN 1 ELSE 0 END) AS p_status FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total\", \"p_status\"], \"rows\": [[\"15000\", \"363\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, SUM(CASE WHEN o_orderdate IS NULL THEN 1 ELSE 0 END) AS null_order_date FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"null_order_date\"], \"rows\": [[\"15000\", \"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.orders has 0 null order_date (SELECT COUNT(*) ... null_order_date = 0). stg_orders model sets order_date = CASE WHEN o_orderstatus <> 'P' THEN o_orderdate END, which yields NULL for rows where o_orderstatus = 'P'. There are 363 rows with status 'P' in raw.orders, matching the failing check count. Therefore the nulls are introduced by the model logic, not upstream data."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "The failing not_null check on stg_orders.order_date was caused by the original CASE expression that set order_date to NULL for rows where o_orderstatus = 'P'. Since the source raw.orders has no null order_date values, we can safely propagate the original order date for all rows. Replacing the CASE with a direct mapping to o_orderdate eliminates the introduced nulls while preserving the column type and all other columns unchanged.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes erroneous CASE that introduced NULLs, correctly propagates existing order_date values. No type/format change, and aligns model with source data. Acceptable."
+      }
+    }
+  ]
+}

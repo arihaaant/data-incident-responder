@@ -1,0 +1,35 @@
+{
+  "id": "inc018",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "model.stg_lineitem",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 0
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 0.0,
+  "steps": [
+    {
+      "agent": "rules",
+      "output": "model.tpch_warehouse.stg_lineitem"
+    }
+  ]
+}

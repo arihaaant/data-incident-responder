@@ -1,0 +1,98 @@
+{
+  "id": "inc043",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_customers",
+    "root_column": "customer_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 17765
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n-- The previous UNION ALL duplicated rows where market_segment = 'BUILDING', causing\n-- duplicate customer_key values and failing the unique test. The duplicate select has been\n-- removed to ensure each customer appears only once.\n",
+    "explanation": "The unique_stg_customers_customer_key test failed with 337 duplicate rows. The stg_customers model contains a UNION ALL that selects all rows from raw.customer and then selects the same rows again where c_mktsegment = 'BUILDING', duplicating those customers. Removing the second SELECT eliminates the duplicates, fixing the unique constraint while preserving all other data and checks.",
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\nunion all\nselect c_custkey, c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal\nfrom {{ source('raw', 'customer') }}\nwhere c_mktsegment = 'BUILDING'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 128.1,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_stg_customers_customer_key\", \"status\": \"fail\", \"failing_rows\": 337, \"message\": \"Got 337 results, configured to fail if != 0\"}], \"skipped_downstream\": 14}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"customer_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\nunion all\\nselect c_custkey, c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal\\nfrom {{ source('raw', 'customer') }}\\nwhere c_mktsegment = 'BUILDING'\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"1500\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_customers.sql",
+        "evidence": "The unique_stg_customers_customer_key test failed with 337 duplicate rows. The stg_customers model contains a UNION ALL that selects all rows from raw.customer and then selects the same rows again where c_mktsegment = 'BUILDING', duplicating those customers. Removing the second SELECT eliminates the duplicates, fixing the unique constraint while preserving all other data and checks."
+      }
+    }
+  ]
+}

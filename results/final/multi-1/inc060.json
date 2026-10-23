@@ -1,0 +1,188 @@
+{
+  "id": "inc060",
+  "kind": "late_data",
+  "split": "holdout",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 35933
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}",
+    "explanation": "Removed the date filter that excluded the most recent 7 days of orders. This restores the missing 59 orders, resolves orphaned lineitem relationships, and fixes the freshness check. No other columns or types were changed.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderdate < (select max(o_orderdate) from {{ source('raw', 'orders') }}) - interval 7 day\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 158.0,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "Freshness test on orders failed (1 stale row) and foreign\u2011key relationship between lineitem.order_key and orders.order_key has 230 orphaned lineitems, indicating recent orders are missing or delayed.",
+        "suspects": [
+          "source: raw.orders (check ingestion timestamps)",
+          "staging model: stg_orders (look for recent failures or load gaps)",
+          "staging model: stg_lineitem (ensure it\u2019s pulling the latest raw data)",
+          "upstream pipeline that populates orders"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS raw_cnt FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"raw_cnt\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT order_key, order_date, ingestion_timestamp FROM raw.orders ORDER BY ingestion_timestamp DESC LIMIT 5"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS stg_cnt FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"stg_cnt\"], \"rows\": [[\"14941\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS raw_lineitem_cnt FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"raw_lineitem_cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MAX(_loaded_at) AS max_loaded FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"max_loaded\"], \"rows\": [[\"1998-08-03 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS orphan_raw FROM raw.lineitem l LEFT JOIN raw.orders o ON l.l_orderkey = o.o_orderkey WHERE o.o_orderkey IS NULL"
+      },
+      "result": "{\"columns\": [\"orphan_raw\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS stg_lineitem_cnt FROM staging.stg_lineitem"
+      },
+      "result": "{\"columns\": [\"stg_lineitem_cnt\"], \"rows\": [[\"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT o_orderkey) AS raw_dist FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"raw_dist\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT o.o_orderkey FROM raw.orders o LEFT JOIN staging.stg_orders s ON o.o_orderkey = s.o_orderkey WHERE s.o_orderkey IS NULL LIMIT 20"
+      },
+      "result": "{\"error\": \"Binder Error: Values list \\\"s\\\" does not have a column named \\\"o_orderkey\\\"\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderdate < (select max(o_orderdate) from {{ source('raw', 'orders') }}) - interval 7 day\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.orders has 15000 rows, stg_orders only 14941 rows (59 missing). The stg_orders SQL filters out orders with order_date within the last 7 days (where o_orderdate < max(o_orderdate) - interval 7 day). This filter drops recent orders, causing orphaned lineitems (230) and freshness check failure (1 stale row). Raw data shows no orphaned lineitems, so the issue originates from the stg_orders model code."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "Removed the date filter that excluded the most recent 7 days of orders. This restores the missing 59 orders, resolves orphaned lineitem relationships, and fixes the freshness check. No other columns or types were changed.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes the erroneous date filter that caused missing recent orders, directly addressing the root cause without masking data or altering column definitions."
+      }
+    }
+  ]
+}

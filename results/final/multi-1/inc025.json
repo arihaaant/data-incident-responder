@@ -1,0 +1,187 @@
+{
+  "id": "inc025",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.dim_customers",
+    "root_column": "region_name",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.dim_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 35286
+  },
+  "patch": {
+    "file": "models/marts/dim_customers.sql",
+    "sql": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\nleft join {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\nleft join {{ ref('stg_regions') }} r on n.region_key = r.region_key",
+    "explanation": "Fixed the join logic in dim_customers. The original join incorrectly matched c.customer_key to n.nation_key, dropping most customers and causing downstream null region_name values. Updated to join on the correct foreign key c.nation_key = n.nation_key and changed the region join to a left join to retain all customers even if a region is missing. This preserves column names/types and ensures all customers appear in the dimension, addressing the null spike in fct_orders.region_name.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c.customer_key,\n    c.customer_name,\n    c.market_segment,\n    c.account_balance,\n    n.nation_name,\n    r.region_name\nfrom {{ ref('stg_customers') }} c\nleft join {{ ref('stg_nations') }} n on c.customer_key = n.nation_key\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 258.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on fct_orders.region_name failed with 14,744 null values, indicating a sudden influx of missing region names in the fact table.",
+        "suspects": [
+          "source: raw.orders (the upstream raw table that feeds the fact)",
+          "staging model: stg_orders (where region_name is derived or joined)",
+          "marts model: fct_orders (the final fact table where the nulls appear)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(region_name) AS not_null, COUNT(*)-COUNT(region_name) AS nulls FROM marts.fct_orders"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"not_null\", \"nulls\"], \"rows\": [[\"15000\", \"256\", \"14744\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(region_name) AS not_null, COUNT(*)-COUNT(region_name) AS nulls FROM staging.stg_orders"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"region_name\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0) as gross_re"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.dim_customers\", \"upstream\": [\"stg_customers\", \"stg_nations\", \"stg_regions\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_dim_customers_region_name__AFRICA__AMERICA__ASIA__EUROPE__MIDDLE_EAST\", \"not_null_dim_customers_customer_key\", \"not_null_dim_customers_region_name\", \"unique_dim_customers_customer_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(region_name) AS not_null, COUNT(*)-COUNT(region_name) AS nulls FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"total\", \"not_null\", \"nulls\"], \"rows\": [[\"24\", \"24\", \"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT customer_key) AS distinct_customers FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"distinct_customers\"], \"rows\": [[\"1000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_customers FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"total_customers\"], \"rows\": [[\"24\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"path\": \"models/marts/dim_customers.sql\", \"sql\": \"select\\n    c.customer_key,\\n    c.customer_name,\\n    c.market_segment,\\n    c.account_balance,\\n    n.nation_name,\\n    r.region_name\\nfrom {{ ref('stg_customers') }} c\\nleft join {{ ref('stg_nations') }} n on c.customer_key = n.nation_key\\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"total\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total FROM staging.stg_nations"
+      },
+      "result": "{\"columns\": [\"total\"], \"rows\": [[\"25\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.dim_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "fct_orders has 14,744 null region_name out of 15,000 rows. dim_customers has only 24 rows, all non-null region_name. The join in dim_customers uses c.customer_key = n.nation_key, which is incorrect, causing most customers to be dropped. Correct join should be c.nation_key = n.nation_key and use left joins to retain all customers, fixing the null spike."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/dim_customers.sql",
+        "explanation": "Fixed the join logic in dim_customers. The original join incorrectly matched c.customer_key to n.nation_key, dropping most customers and causing downstream null region_name values. Updated to join on the correct foreign key c.nation_key = n.nation_key and changed the region join to a left join to retain all customers even if a region is missing. This preserves column names/types and ensures all customers appear in the dimension, addressing the null spike in fct_orders.region_name.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix corrects join key and uses left joins, restoring all customers and eliminating null region_name spikes. No masking or data alteration."
+      }
+    }
+  ]
+}

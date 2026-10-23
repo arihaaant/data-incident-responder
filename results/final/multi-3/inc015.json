@@ -1,0 +1,115 @@
+{
+  "id": "inc015",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.nation",
+    "root_column": "n_regionkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.nation",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 11883
+  },
+  "patch": {
+    "file": "models/staging/stg_nations.sql",
+    "sql": "select\n    n_nationkey as nation_key,\n    n_name as nation_name,\n    n_region_key as region_key\nfrom {{ source('raw', 'nation') }}",
+    "explanation": "The upstream raw.nation source renamed the column from n_regionkey to n_region_key. The staging model referenced the old name, causing a binder error. Updated the SELECT to use n_region_key while preserving column aliases and types. No other changes were made.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    n_nationkey as nation_key,\n    n_name as nation_name,\n    n_regionkey as region_key\nfrom {{ source('raw', 'nation') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 122.0,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_nations references column `n_regionkey` which no longer exists in the source; the source now provides `n_region_key`. This schema change caused a binder error and downstream models were skipped.",
+        "suspects": [
+          "source raw.nations (check the raw table schema for column name changes)",
+          "model tpch_warehouse.stg_nations (fix the column reference)",
+          "any downstream models in the marts layer that depend on stg_nations"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_nations"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_nations\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "tpch_warehouse.stg_nations"
+      },
+      "result": "{\"error\": \"no model called tpch_warehouse.stg_nations\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_nations"
+      },
+      "result": "{\"path\": \"models/staging/stg_nations.sql\", \"sql\": \"select\\n    n_nationkey as nation_key,\\n    n_name as nation_name,\\n    n_regionkey as region_key\\nfrom {{ source('raw', 'nation') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.nation",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.nation schema shows column n_region_key, not n_regionkey. stg_nations model references n_regionkey causing binder error. Renamed column is upstream change; staging model should be patched to use n_region_key."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_nations.sql",
+        "explanation": "The upstream raw.nation source renamed the column from n_regionkey to n_region_key. The staging model referenced the old name, causing a binder error. Updated the SELECT to use n_region_key while preserving column aliases and types. No other changes were made.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates the staging model to reference the renamed column n_region_key, addressing the upstream schema change without masking data."
+      }
+    }
+  ]
+}

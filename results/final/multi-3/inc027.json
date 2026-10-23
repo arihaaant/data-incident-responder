@@ -1,0 +1,123 @@
+{
+  "id": "inc027",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_customers",
+    "root_column": "market_segment",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 14180
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    trim(c_mktsegment) as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "The not_null test on `market_segment` was failing because the model used `nullif(trim(c_mktsegment), 'MACHINERY')`, which turned any 'MACHINERY' values into NULL. The source data contains no nulls, and the test expects all rows to have a non\u2011null market segment. Replaced the `nullif` logic with a simple `trim` to preserve the original value while still cleaning whitespace. All other columns and their types remain unchanged.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    nullif(trim(c_mktsegment), 'MACHINERY') as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 104.8,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on `stg_customers.market_segment` failed with 288 null rows, indicating a sudden influx of missing values in a column that should always be populated.",
+        "suspects": [
+          "stg_customers model (especially the `market_segment` transformation logic)",
+          "raw.customers source table \u2013 check for new nulls in the source column",
+          "any recent changes to the upstream ETL or CSV load that could have altered the market_segment field"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, SUM(CASE WHEN market_segment IS NULL THEN 1 ELSE 0 END) AS null_market_segment FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"market_segment\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    nullif(trim(c_mktsegment), 'MACHINERY') as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, SUM(CASE WHEN c_mktsegment = 'MACHINERY' THEN 1 ELSE 0 END) AS mach_rows FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total\", \"mach_rows\"], \"rows\": [[\"1500\", \"288\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.customer has 1500 rows, 288 with c_mktsegment='MACHINERY'. stg_customers model uses nullif(trim(c_mktsegment), 'MACHINERY') which converts those 288 rows to NULL, causing not_null test to fail. The source data has no nulls, so the issue is the model's transformation."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The not_null test on `market_segment` was failing because the model used `nullif(trim(c_mktsegment), 'MACHINERY')`, which turned any 'MACHINERY' values into NULL. The source data contains no nulls, and the test expects all rows to have a non\u2011null market segment. Replaced the `nullif` logic with a simple `trim` to preserve the original value while still cleaning whitespace. All other columns and their types remain unchanged.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Patch removes the erroneous nullif that turned valid 'MACHINERY' values into NULL, fixing the not_null test without masking data or altering types. It directly addresses the root cause."
+      }
+    }
+  ]
+}

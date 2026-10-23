@@ -1,0 +1,155 @@
+{
+  "id": "inc038",
+  "kind": "duplicates",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 44911
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select distinct\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n",
+    "explanation": "The unique_stg_customers_customer_key test failed with 225 duplicate customer_key values. raw.customer has 1725 rows but only 1500 distinct c_custkey, indicating duplicate primary keys. Inspection shows duplicate rows (e.g., c_custkey=6) are identical across all columns, matching the policy for identical duplicate deliveries. Deduplicating in the staging model with SELECT DISTINCT resolves the uniqueness violation without losing data.",
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 196.2,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"unique_stg_customers_customer_key\", \"status\": \"fail\", \"failing_rows\": 225, \"message\": \"Got 225 results, configured to fail if != 0\"}], \"skipped_downstream\": 14}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total\", \"distinct_keys\"], \"rows\": [[\"1725\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt, COUNT(DISTINCT c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal) AS distinct_rows FROM raw.customer GROUP BY c_custkey HAVING cnt > 1"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(VARCHAR, VARCHAR, VARCHAR, INTEGER, VARCHAR, DECIMAL(15,2))'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt FROM raw.customer GROUP BY c_custkey HAVING cnt > 1"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"cnt\"], \"rows\": [[\"6\", \"2\"], [\"11\", \"2\"], [\"16\", \"2\"], [\"27\", \"2\"], [\"32\", \"2\"], [\"37\", \"2\"], [\"48\", \"2\"], [\"53\", \"2\"], [\"58\", \"2\"], [\"69\", \"2\"], [\"74\", \"2\"], [\"79\", \"2\"], [\"90\", \"2\"], [\"95\", \"2\"], [\"100\", \"2\"], [\"106\", \"2\"], [\"111\", \"2\"], [\"116\", \"2\"], [\"127\", \"2\"], [\"132\", \"2\"], [\"137\", \"2\"], [\"148\", \"2\"], [\"153\", \"2\"], [\"158\", \"2\"], [\"169\", \"2\"], [\"174\", \"2\"], [\"179\", \"2\"], [\"190\", \"2\"], [\"195\", \"2\"], [\"200\", \"2\"], [\"206\", \"2\"], [\"211\", \"2\"], [\"216\", \"2\"], [\"227\", \"2"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 6"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"6\", \"***\", \"***\", \"20\", \"***\", \"7638.57\", \"AUTOMOBILE\", \" quickly silent asymptotes are slyly regular excuses. instructions wake furiously? quickly bold courts p\"], [\"6\", \"***\", \"***\", \"20\", \"***\", \"7638.57\", \"AUTOMOBILE\", \" quickly silent asymptotes are slyly regular excuses. instructions wake furiously? quickly bold courts p\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 11"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"11\", \"***\", \"***\", \"23\", \"***\", \"-272.60\", \"BUILDING\", \"ng to the regular foxes. furiously final deposits across the final platelets cajole quickly above th\"], [\"11\", \"***\", \"***\", \"23\", \"***\", \"-272.60\", \"BUILDING\", \"ng to the regular foxes. furiously final deposits across the final platelets cajole quickly above th\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS total, COUNT(DISTINCT c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment) AS distinct_rows FROM raw.customer GROUP BY c_custkey HAVING total > 1"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(VARCHAR, VARCHAR, INTEGER, VARCHAR, DECIMAL(15,2), VARCHAR, VARCHAR)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment) AS distinct_rows FROM raw.customer WHERE c_custkey = 6"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(VARCHAR, VARCHAR, INTEGER, VARCHAR, DECIMAL(15,2), VARCHAR, VARCHAR)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment) AS distinct_rows FROM raw.customer WHERE c_custkey = 6"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(VARCHAR, VARCHAR, INTEGER, VARCHAR, DECIMAL(15,2), VARCHAR, VARCHAR)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "try_patch",
+      "args": {
+        "file": "models/staging/stg_customers.sql",
+        "sql": "select distinct\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+      },
+      "result": "{\"problems\": [], \"skipped_downstream\": 0, \"passes\": true}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "file": "models/staging/stg_customers.sql",
+        "evidence": "The unique_stg_customers_customer_key test failed with 225 duplicate customer_key values. raw.customer has 1725 rows but only 1500 distinct c_custkey, indicating duplicate primary keys. Inspection shows duplicate rows (e.g., c_custkey=6) are identical across all columns, matching the policy for identical duplicate deliveries. Deduplicating in the staging model with SELECT DISTINCT resolves the uniqueness violation without losing data."
+      }
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "id": "inc043",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_customers",
+    "root_column": "customer_key",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_customers",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 19010
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n",
+    "explanation": "Removed the erroneous UNION ALL that duplicated rows. The original model selected all customers and then UNION ALL the same source filtered to `c_mktsegment = 'BUILDING'`, which re\u2011added those rows, causing 337 duplicate `customer_key` values and failing the uniqueness check. By keeping only the single SELECT (which already includes all rows), we preserve the required columns and types while ensuring each `customer_key` appears only once.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\nunion all\nselect c_custkey, c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal\nfrom {{ source('raw', 'customer') }}\nwhere c_mktsegment = 'BUILDING'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 162.0,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on `stg_customers.customer_key` found 337 duplicate keys, indicating duplicate records are making it through the staging layer.",
+        "suspects": [
+          "stg_customers model (SQL logic that creates `customer_key`)",
+          "raw.customers source table (incoming data may contain duplicates)",
+          "any upstream transformations or incremental loads that merge into `stg_customers`"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT customer_key) AS distinct_keys, COUNT(*) AS total_rows FROM stg_customers"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_customers, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"1837\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT customer_key) AS distinct_keys, COUNT(*) AS total_rows FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"distinct_keys\", \"total_rows\"], \"rows\": [[\"1500\", \"1837\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT customer_key) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"customer_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\nunion all\\nselect c_custkey, c_name, c_address, c_phone, c_nationkey, c_mktsegment, c_acctbal\\nfrom {{ source('raw', 'customer') }}\\nwhere c_mktsegment = 'BUILDING'\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_customers",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "raw.customer has 1500 rows, distinct keys 1500. stg_customers has 1837 rows, distinct keys 1500, indicating 337 extra rows. Model SQL unions raw.customer with itself (union all) plus a filtered duplicate, creating duplicate customer_key rows. The uniqueness check fails due to this code error."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "Removed the erroneous UNION ALL that duplicated rows. The original model selected all customers and then UNION ALL the same source filtered to `c_mktsegment = 'BUILDING'`, which re\u2011added those rows, causing 337 duplicate `customer_key` values and failing the uniqueness check. By keeping only the single SELECT (which already includes all rows), we preserve the required columns and types while ensuring each `customer_key` appears only once.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes erroneous UNION ALL that duplicated rows, restoring one-to-one mapping of customer_key and satisfying uniqueness check. No type/format changes involved."
+      }
+    }
+  ]
+}

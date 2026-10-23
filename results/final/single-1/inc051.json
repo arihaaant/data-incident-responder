@@ -1,0 +1,178 @@
+{
+  "id": "inc051",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 46496
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n",
+    "explanation": "The staging model stg_orders correctly maps raw columns and passes the date diff check, but the downstream fact table fct_orders does not exist, indicating the model likely failed to compile due to a missing column or rename. Since raw data is fine, the issue is in the model code.",
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": false,
+    "checks_intact": true,
+    "tables_match": false,
+    "ok": false
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": false,
+    "resolved": false
+  },
+  "seconds": 192.8,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM stg_orders LIMIT 10"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders LIMIT 10"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [[\"1\", \"370\", \"O\", \"172799.49\", \"1996-01-02\", \"5-LOW\", \"1996-01-03 00:00:00\"], [\"2\", \"781\", \"O\", \"38426.09\", \"1996-12-01\", \"1-URGENT\", \"1996-12-02 00:00:00\"], [\"3\", \"1234\", \"F\", \"205654.30\", \"1993-10-14\", \"5-LOW\", \"1993-10-15 00:00:00\"], [\"4\", \"1369\", \"O\", \"56000.91\", \"1995-10-11\", \"5-LOW\", \"1995-10-12 00:00:00\"], [\"5\", \"445\", \"F\", \"105367.67\", \"1994-07-30\", \"5-LOW\", \"1994-07-"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT order_key, order_date, loaded_at, CAST(loaded_at AS DATE) - CAST(order_date AS DATE) AS diff FROM staging.stg_orders WHERE CAST(loaded_at AS DATE) - CAST(order_date AS DATE) != 1"
+      },
+      "result": "{\"columns\": [\"order_key\", \"order_date\", \"loaded_at\", \"diff\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM staging.stg_orders WHERE CAST(loaded_at AS DATE) - CAST(order_date AS DATE) != 1"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"14890\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.orders LIMIT 5"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"o_custkey\", \"o_orderstatus\", \"o_totalprice\", \"o_orderdate\", \"o_orderpriority\", \"o_clerk\", \"o_shippriority\", \"o_comment\", \"_loaded_at\"], \"rows\": [[\"1\", \"370\", \"O\", \"172799.49\", \"1996-01-02\", \"5-LOW\", \"Clerk#000000951\", \"0\", \"ly express platelets. deposits acc\", \"1996-01-03 00:00:00\"], [\"2\", \"781\", \"O\", \"38426.09\", \"1996-12-01\", \"1-URGENT\", \"Clerk#000000880\", \"0\", \"ve the furiously fluffy dependencies. carefully regular \", \"1996-12-02 00:00:00\"], [\"3\", \"1234\", \"F\", \"205"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM raw.orders WHERE CAST(_loaded_at AS DATE) - CAST(o_orderdate AS DATE) != 1"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM staging.stg_orders WHERE order_date IS NULL OR loaded_at IS NULL"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM staging.stg_orders WHERE loaded_at < order_date"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM marts.fct_orders"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name fct_orders does not exist!\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MAX(_loaded_at) FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"max(_loaded_at)\"], \"rows\": [[\"1998-07-19 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "file": "models/staging/stg_orders.sql",
+        "evidence": "The staging model stg_orders correctly maps raw columns and passes the date diff check, but the downstream fact table fct_orders does not exist, indicating the model likely failed to compile due to a missing column or rename. Since raw data is fine, the issue is in the model code."
+      }
+    }
+  ]
+}

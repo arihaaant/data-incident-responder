@@ -1,0 +1,116 @@
+{
+  "id": "inc012",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 15330
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    strptime(trim(o_orderdate), '%m/%d/%Y')::date as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}",
+    "explanation": "The contract for stg_orders expects order_date to be a DATE, but the source column o_orderdate is VARCHAR. All rows are convertible using the format %m/%d/%Y. Updated the model to cast o_orderdate to DATE with strptime(trim(o_orderdate), '%m/%d/%Y')::date, preserving all other columns and types.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": false,
+    "root_column_correct": false,
+    "cause_correct": false,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 171.0,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_orders model has a contract mismatch: the column order_date is defined as VARCHAR in the model but the contract expects DATE, causing a compilation error.",
+        "suspects": [
+          "models/staging/stg_orders.sql (column definition for order_date)",
+          "sources/raw/orders (upstream raw table schema)",
+          "schema contracts defined in dbt_project.yml or yaml files for stg_orders"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_orders"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_orders\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.orders",
+        "column": "o_orderdate"
+      },
+      "result": "{\"column\": \"raw.orders.o_orderdate\", \"current_type\": \"varchar\", \"target_type\": \"date\", \"rows\": 15000, \"nulls\": 0, \"contract\": \"stg_orders.order_date is contracted as date\", \"formats_that_parse\": {\"%m/%d/%Y\": 15000, \"%d/%m/%Y\": 5980}, \"best_format\": \"%m/%d/%Y\", \"convertible\": 15000, \"fail_to_convert\": 0, \"lossless\": true, \"issues\": [], \"conversion\": \"strptime(trim(o_orderdate), '%m/%d/%Y')::date\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_orders model selects o_orderdate as order_date without casting, leaving it as VARCHAR. The contract expects DATE, causing a compilation error. profile_column on raw.orders.o_orderdate shows all 15000 rows are convertible to DATE losslessly (format %m/%d/%Y). Thus the problem originates from the model's SQL, not the source data. Updating stg_orders.sql to cast o_orderdate to DATE will resolve the contract mismatch."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "The contract for stg_orders expects order_date to be a DATE, but the source column o_orderdate is VARCHAR. All rows are convertible using the format %m/%d/%Y. Updated the model to cast o_orderdate to DATE with strptime(trim(o_orderdate), '%m/%d/%Y')::date, preserving all other columns and types.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly casts source VARCHAR to DATE using lossless conversion as indicated by profile; resolves contract mismatch without data loss."
+      }
+    }
+  ]
+}

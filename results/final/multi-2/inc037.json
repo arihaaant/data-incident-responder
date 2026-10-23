@@ -1,0 +1,163 @@
+{
+  "id": "inc037",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_custkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 34915
+  },
+  "patch": {
+    "file": "models/staging/stg_customers.sql",
+    "sql": "select distinct\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}",
+    "explanation": "The raw.customer source contains 75 exact duplicate rows (same c_custkey and all other column values). The staging model stg_customers simply selected the source columns, propagating those duplicates, which caused the unique_stg_customers_customer_key check to fail. Since the duplicates are identical, they represent a delivery duplication and can be safely removed by deduplicating in the staging model. Using SELECT DISTINCT preserves the original column names and types while eliminating the duplicate rows, fixing the uniqueness check without altering any other logic.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    c_custkey as customer_key,\n    c_name as customer_name,\n    c_address as address,\n    c_phone as phone,\n    c_nationkey as nation_key,\n    c_mktsegment as market_segment,\n    c_acctbal as account_balance\nfrom {{ source('raw', 'customer') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 168.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_customers.customer_key found 75 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_customers model (the view that creates customer_key)",
+          "raw.customers source table (duplicate raw records)",
+          "any upstream transformations that generate or modify customer_key"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"1575\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "PRAGMA table_info('raw.customer')"
+      },
+      "result": "{\"error\": \"refused: only select queries are allowed, got pragma\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer LIMIT 5"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"1\", \"***\", \"***\", \"15\", \"***\", \"711.56\", \"BUILDING\", \"y final requests wake slyly quickly special accounts. blithely\"], [\"2\", \"***\", \"***\", \"13\", \"***\", \"121.65\", \"AUTOMOBILE\", \"y carefully regular foxes. slyly regular requests about the bli\"], [\"3\", \"***\", \"***\", \"1\", \"***\", \"7498.12\", \"AUTOMOBILE\", \"fully. carefully silent instructions sleep alongside of the slyly re"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(DISTINCT c_custkey) AS distinct_keys FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"total\", \"distinct_keys\"], \"rows\": [[\"1575\", \"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt, COUNT(DISTINCT c_name) AS name_cnt, COUNT(DISTINCT c_address) AS addr_cnt, COUNT(DISTINCT c_nationkey) AS nation_cnt, COUNT(DISTINCT c_phone) AS phone_cnt, COUNT(DISTINCT c_mktsegment) AS seg_cnt, COUNT(DISTINCT c_acctbal) AS bal_cnt, COUNT(DISTINCT c_comment) AS comment_cnt FROM raw.customer GROUP BY c_custkey HAVING cnt > 1"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"cnt\", \"name_cnt\", \"addr_cnt\", \"nation_cnt\", \"phone_cnt\", \"seg_cnt\", \"bal_cnt\", \"comment_cnt\"], \"rows\": [[\"458\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"558\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"716\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"916\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"1258\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"58\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"479\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"579\", \"2\", \"1\", \"1\", \"1\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 458"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"458\", \"***\", \"***\", \"4\", \"***\", \"-38.42\", \"BUILDING\", \"usual, silent requests against the pack\"], [\"458\", \"***\", \"***\", \"4\", \"***\", \"-38.42\", \"BUILDING\", \"usual, silent requests against the pack\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.customer WHERE c_custkey = 558"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"c_name\", \"c_address\", \"c_nationkey\", \"c_phone\", \"c_acctbal\", \"c_mktsegment\", \"c_comment\"], \"rows\": [[\"558\", \"***\", \"***\", \"17\", \"***\", \"1912.23\", \"HOUSEHOLD\", \"ronic deposits boost ideas. regular som\"], [\"558\", \"***\", \"***\", \"17\", \"***\", \"1912.23\", \"HOUSEHOLD\", \"ronic deposits boost ideas. regular som\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT c_custkey, COUNT(*) AS cnt, COUNT(DISTINCT CONCAT_WS('||', c_name, c_address, c_nationkey, c_phone, c_acctbal, c_mktsegment, c_comment)) AS distinct_rows FROM raw.customer GROUP BY c_custkey HAVING cnt > 1 AND distinct_rows > 1"
+      },
+      "result": "{\"columns\": [\"c_custkey\", \"cnt\", \"distinct_rows\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.customer has 1575 rows but only 1500 distinct c_custkey values, indicating 75 duplicate primary key rows. The duplicates are identical across all columns (e.g., c_custkey 458 appears twice with identical data). The staging model stg_customers simply selects and renames c_custkey, so the duplicate keys propagate, causing the unique_stg_customers_customer_key check to fail with 75 duplicate rows. Policy: identical duplicates are a delivery duplication; fix by deduplicating in the staging model."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_customers.sql",
+        "explanation": "The raw.customer source contains 75 exact duplicate rows (same c_custkey and all other column values). The staging model stg_customers simply selected the source columns, propagating those duplicates, which caused the unique_stg_customers_customer_key check to fail. Since the duplicates are identical, they represent a delivery duplication and can be safely removed by deduplicating in the staging model. Using SELECT DISTINCT preserves the original column names and types while eliminating the duplicate rows, fixing the uniqueness check without altering any other logic.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly removes exact duplicate rows using SELECT DISTINCT, addressing the delivery duplication root cause without masking or altering data."
+      }
+    }
+  ]
+}

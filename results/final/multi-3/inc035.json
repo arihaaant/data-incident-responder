@@ -1,0 +1,155 @@
+{
+  "id": "inc035",
+  "kind": "duplicates",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_orderkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.lineitem",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 27220
+  },
+  "patch": {
+    "file": "models/staging/stg_lineitem.sql",
+    "sql": "with raw_lineitem as (\n    select *\n    from {{ source('raw', 'lineitem') }}\n)\n\nselect distinct\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom raw_lineitem",
+    "explanation": "Added a CTE to reference the source and wrapped the SELECT in DISTINCT to remove exact duplicate rows that were causing the unique_stg_lineitem_order_line_id check to fail. This preserves all column names, types, and derived calculations while ensuring only one copy of each identical row is loaded into the staging model.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    l_orderkey || '-' || l_linenumber as order_line_id,\n    l_orderkey as order_key,\n    l_linenumber as line_number,\n    l_partkey as part_key,\n    l_suppkey as supplier_key,\n    l_quantity as quantity,\n    l_extendedprice as extended_price,\n    l_discount as discount,\n    l_tax as tax,\n    l_returnflag as return_flag,\n    l_shipdate as ship_date,\n    l_extendedprice * (1 - l_discount) as net_revenue\nfrom {{ source('raw', 'lineitem') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 191.5,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_lineitem.order_line_id found 5,639 duplicate rows, indicating duplicate records are entering the staging layer.",
+        "suspects": [
+          "stg_lineitem model (SQL definition)",
+          "raw.lineitem source (upstream extract/load)",
+          "any upstream transformations that join or union lineitem data"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\"], \"rows\": [[\"65814\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_line_id) AS distinct_ids, COUNT(*) AS total FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"order_line_id\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT l_orderkey, l_linenumber) AS distinct_combo FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: No function matches the given name and argument types 'count(BIGINT, BIGINT)'. You might need to add explicit type casts.\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT l_orderkey || '-' || l_linenumber) AS distinct_ids FROM raw.lineitem"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_ids\"], \"rows\": [[\"65814\", \"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT l_orderkey, l_linenumber, COUNT(*) AS cnt FROM raw.lineitem GROUP BY l_orderkey, l_linenumber HAVING COUNT(*) > 1 LIMIT 5"
+      },
+      "result": "{\"columns\": [\"l_orderkey\", \"l_linenumber\", \"cnt\"], \"rows\": [[\"96\", \"2\", \"2\"], [\"226\", \"5\", \"2\"], [\"358\", \"2\", \"2\"], [\"386\", \"1\", \"2\"], [\"548\", \"1\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.lineitem WHERE l_orderkey = 96 AND l_linenumber = 2"
+      },
+      "result": "{\"columns\": [\"l_orderkey\", \"l_partkey\", \"l_suppkey\", \"l_linenumber\", \"l_quantity\", \"l_extendedprice\", \"l_discount\", \"l_tax\", \"l_returnflag\", \"l_linestatus\", \"l_shipdate\", \"l_commitdate\", \"l_receiptdate\", \"l_shipinstruct\", \"l_shipmode\", \"l_comment\"], \"rows\": [[\"96\", \"1354\", \"55\", \"2\", \"30.00\", \"37660.50\", \"0.01\", \"0.06\", \"R\", \"F\", \"1994-06-03\", \"1994-05-29\", \"1994-06-22\", \"DELIVER IN PERSON\", \"TRUCK\", \"sublate furiously. silently \"], [\"96\", \"1354\", \"55\", \"2\", \"30.00\", \"37660.50\", \"0.01\", \"0.06\", "
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.lineitem has 65,814 rows but only 60,175 distinct order_key-line_number combos (order_line_id). Duplicate rows are exact copies (e.g., orderkey 96 linenumber 2 appears twice with identical column values). The unique_stg_lineitem_order_line_id check fails with 5,639 duplicate rows, which originates from these source duplicates. Policy: identical duplicate rows indicate a batch delivered twice, so we can deduplicate in the staging model."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_lineitem.sql",
+        "explanation": "Added a CTE to reference the source and wrapped the SELECT in DISTINCT to remove exact duplicate rows that were causing the unique_stg_lineitem_order_line_id check to fail. This preserves all column names, types, and derived calculations while ensuring only one copy of each identical row is loaded into the staging model.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly deduplicates exact duplicate source rows using DISTINCT, addressing the root cause without masking data or altering column semantics. Policy permits deduplication in staging for identical batch duplicates."
+      }
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "id": "inc049",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 54438
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 189.6,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM information_schema.tables WHERE table_name ILIKE '%orders%';"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"table_type\", \"self_referencing_column_name\", \"reference_generation\", \"user_defined_type_catalog\", \"user_defined_type_schema\", \"user_defined_type_name\", \"is_insertable_into\", \"is_typed\", \"commit_action\", \"TABLE_COMMENT\"], \"rows\": [[\"warehouse\", \"raw\", \"orders\", \"BASE TABLE\", null, null, null, null, null, \"YES\", \"NO\", null, null], [\"warehouse\", \"staging\", \"stg_orders\", \"VIEW\", null, null, null, null, null, \"NO\", \"NO\", null, null]], \"trun"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM stg_orders LIMIT 10;"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders LIMIT 10;"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [[\"1\", \"370\", \"O\", \"172799.49\", \"1996-01-02\", \"5-LOW\", \"1996-01-03 00:00:00\"], [\"2\", \"781\", \"O\", \"38426.09\", \"1996-12-01\", \"1-URGENT\", \"1996-12-02 00:00:00\"], [\"3\", \"1234\", \"F\", \"205654.30\", \"1993-10-14\", \"5-LOW\", \"1993-10-15 00:00:00\"], [\"4\", \"1369\", \"O\", \"56000.91\", \"1995-10-11\", \"5-LOW\", \"1995-10-12 00:00:00\"], [\"5\", \"445\", \"F\", \"105367.67\", \"1994-07-30\", \"5-LOW\", \"1994-07-"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"assert_orders_fresh\", \"status\": \"fail\", \"failing_rows\": 1, \"message\": \"Got 1 result, configured to fail if != 0\"}], \"skipped_downstream\": 9}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.orders LIMIT 10;"
+      },
+      "result": "{\"columns\": [\"o_orderkey\", \"o_custkey\", \"o_orderstatus\", \"o_totalprice\", \"o_orderdate\", \"o_orderpriority\", \"o_clerk\", \"o_shippriority\", \"o_comment\", \"_loaded_at\"], \"rows\": [[\"1\", \"370\", \"O\", \"172799.49\", \"1996-01-02\", \"5-LOW\", \"Clerk#000000951\", \"0\", \"ly express platelets. deposits acc\", \"1996-01-03 00:00:00\"], [\"2\", \"781\", \"O\", \"38426.09\", \"1996-12-01\", \"1-URGENT\", \"Clerk#000000880\", \"0\", \"ve the furiously fluffy dependencies. carefully regular \", \"1996-12-02 00:00:00\"], [\"3\", \"1234\", \"F\", \"205"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM information_schema.tables WHERE table_name = 'assert_orders_fresh'"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"table_type\", \"self_referencing_column_name\", \"reference_generation\", \"user_defined_type_catalog\", \"user_defined_type_schema\", \"user_defined_type_name\", \"is_insertable_into\", \"is_typed\", \"commit_action\", \"TABLE_COMMENT\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": null
+      },
+      "result": "{\"marts.dim_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\", \"nation_name VARCHAR\", \"region_name VARCHAR\"], \"marts.fct_order_items\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"brand VARCHAR\", \"part_type VARCHAR\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"net_revenue DECIMAL(18,4)\", \"return_flag VARCHAR\", \"ship_date DATE\"], \"raw.customer\": "
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0) as gross_re"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM information_schema.columns WHERE table_name ILIKE '%assert_orders_fresh%';"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"column_name\", \"ordinal_position\", \"column_default\", \"is_nullable\", \"data_type\", \"character_maximum_length\", \"character_octet_length\", \"numeric_precision\", \"numeric_precision_radix\", \"numeric_scale\", \"datetime_precision\", \"interval_type\", \"interval_precision\", \"character_set_catalog\", \"character_set_schema\", \"character_set_name\", \"collation_catalog\", \"collation_schema\", \"collation_name\", \"domain_catalog\", \"domain_schema\", \"domain_name\","
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MIN(loaded_at) as min_loaded, MAX(loaded_at) as max_loaded FROM staging.stg_orders;"
+      },
+      "result": "{\"columns\": [\"min_loaded\", \"max_loaded\"], \"rows\": [[\"1992-01-02 00:00:00\", \"1998-07-26 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) FROM staging.stg_orders WHERE loaded_at IS NULL;"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The assert_orders_fresh test fails with 1 row. Loaded_at values in staging.stg_orders range from 1992-01-02 to 1998-07-26, indicating the source raw.orders data is stale and does not meet the freshness expectation. The staging model simply selects from raw.orders without transformation, so the issue originates from the source data."
+      }
+    }
+  ]
+}

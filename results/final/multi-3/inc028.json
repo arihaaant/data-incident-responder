@@ -1,0 +1,179 @@
+{
+  "id": "inc028",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.fct_orders",
+    "root_column": "region_name",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.fct_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 40275
+  },
+  "patch": {
+    "file": "models/marts/fct_orders.sql",
+    "sql": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\n-- Fixed join condition: match orders to customers on customer_key, not order_key\nleft join {{ ref('dim_customers') }} c on o.customer_key = c.customer_key\nleft join items i on o.order_key = i.order_key",
+    "explanation": "The original model joined `stg_orders` to `dim_customers` using `o.order_key = c.customer_key`, which mismatched keys and caused `region_name` to be null for most rows, failing the not_null test. Updated the join to correctly use `o.customer_key = c.customer_key`. All other columns, types, and logic remain unchanged.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "with items as (\n    select\n        order_key,\n        count(*) as item_count,\n        sum(extended_price) as gross_revenue,\n        sum(net_revenue) as net_revenue\n    from {{ ref('fct_order_items') }}\n    group by order_key\n)\n\nselect\n    o.order_key,\n    o.customer_key,\n    c.region_name,\n    o.order_status,\n    o.order_date,\n    o.priority,\n    coalesce(i.item_count, 0) as item_count,\n    coalesce(i.gross_revenue, 0) as gross_revenue,\n    coalesce(i.net_revenue, 0) as net_revenue,\n    o.loaded_at\nfrom {{ ref('stg_orders') }} o\nleft join {{ ref('dim_customers') }} c on o.order_key = c.customer_key\nleft join items i on o.order_key = i.order_key\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 228.2,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on fct_orders.region_name failed with 14,625 null values, indicating a sudden influx of missing region names in the fact table.",
+        "suspects": [
+          "source: raw.orders (the raw table that feeds the orders pipeline)",
+          "staging model: staging.orders (where region_name is derived or joined)",
+          "any upstream dim_region join logic in the fct_orders model"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0) as gross_re"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT count(*) FROM raw.orders) AS raw_orders,\n       (SELECT count(*) FROM staging.stg_orders) AS stg_orders,\n       (SELECT count(*) FROM staging.dim_customers) AS dim_customers,\n       (SELECT count(*) FROM marts.fct_orders) AS fct_orders;"
+      },
+      "result": "{\"error\": \"Catalog Error: Table with name dim_customers does not exist!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) AS total, sum(CASE WHEN region_name IS NULL THEN 1 ELSE 0 END) AS nulls FROM marts.fct_orders;"
+      },
+      "result": "{\"columns\": [\"total\", \"nulls\"], \"rows\": [[\"15000\", \"14625\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"address VARCHAR\", \"phone VARCHAR\", \"nation_key INTEGER\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\"], \"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\""
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "marts"
+      },
+      "result": "{\"marts.dim_customers\": [\"customer_key BIGINT\", \"customer_name VARCHAR\", \"market_segment VARCHAR\", \"account_balance DECIMAL(15,2)\", \"nation_name VARCHAR\", \"region_name VARCHAR\"], \"marts.fct_order_items\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"brand VARCHAR\", \"part_type VARCHAR\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"net_revenue DECIMAL(18,4)\", \"return_flag VARCHAR\", \"ship_date DATE\"], \"marts.fct_order"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) FROM raw.orders;"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT count(*) FROM marts.dim_customers;"
+      },
+      "result": "{\"columns\": [\"count_star()\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"path\": \"models/marts/dim_customers.sql\", \"sql\": \"select\\n    c.customer_key,\\n    c.customer_name,\\n    c.market_segment,\\n    c.account_balance,\\n    n.nation_name,\\n    r.region_name\\nfrom {{ ref('stg_customers') }} c\\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS matches FROM marts.fct_orders o JOIN marts.dim_customers c ON o.order_key = c.customer_key;"
+      },
+      "result": "{\"columns\": [\"matches\"], \"rows\": [[\"375\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.fct_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "Not_null test on fct_orders.region_name failed: 14,625 nulls out of 15,000 rows. fct_orders SQL uses `left join dim_customers c on o.order_key = c.customer_key`, which mismatches keys (order_key vs customer_key). Join result shows only 375 matches, leaving region_name null for the rest. Upstream tables raw.orders, stg_orders, dim_customers have correct data and no null region_name. The problem originates in the fct_orders model code; fixing the join to `on o.customer_key = c.customer_key` will resolve."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/marts/fct_orders.sql",
+        "explanation": "The original model joined `stg_orders` to `dim_customers` using `o.order_key = c.customer_key`, which mismatched keys and caused `region_name` to be null for most rows, failing the not_null test. Updated the join to correctly use `o.customer_key = c.customer_key`. All other columns, types, and logic remain unchanged.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix corrects join key mismatch, restores region_name values, addresses root cause without masking data."
+      }
+    }
+  ]
+}

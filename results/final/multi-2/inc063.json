@@ -1,0 +1,118 @@
+{
+  "id": "inc063",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 26541
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 60.5,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The stg_customers model's contract expects `account_balance` as DECIMAL(15,2) but the model is producing it as VARCHAR, causing a compilation error.",
+        "suspects": [
+          "models/staging/stg_customers.sql (the column definition / cast)",
+          "sources/raw/customers (the upstream raw column type)",
+          "schema.yml contract for stg_customers (expected type mismatch)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal VARCHAR\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdat"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM information_schema.tables WHERE table_schema='staging' AND table_name='stg_customers'"
+      },
+      "result": "{\"columns\": [\"table_catalog\", \"table_schema\", \"table_name\", \"table_type\", \"self_referencing_column_name\", \"reference_generation\", \"user_defined_type_catalog\", \"user_defined_type_schema\", \"user_defined_type_name\", \"is_insertable_into\", \"is_typed\", \"commit_action\", \"TABLE_COMMENT\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "staging"
+      },
+      "result": "{\"staging.stg_lineitem\": [\"order_line_id VARCHAR\", \"order_key BIGINT\", \"line_number BIGINT\", \"part_key BIGINT\", \"supplier_key BIGINT\", \"quantity DECIMAL(15,2)\", \"extended_price DECIMAL(15,2)\", \"discount DECIMAL(15,2)\", \"tax DECIMAL(15,2)\", \"return_flag VARCHAR\", \"ship_date DATE\", \"net_revenue DECIMAL(18,4)\"], \"staging.stg_nations\": [\"nation_key INTEGER\", \"nation_name VARCHAR\", \"region_key INTEGER\"], \"staging.stg_orders\": [\"order_key BIGINT\", \"customer_key BIGINT\", \"order_status VARCHAR\", \"total_"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='staging' AND table_name='stg_customers'"
+      },
+      "result": "{\"columns\": [\"column_name\", \"data_type\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.customer",
+        "column": "c_acctbal"
+      },
+      "result": "{\"column\": \"raw.customer.c_acctbal\", \"current_type\": \"varchar\", \"target_type\": \"decimal(15,2)\", \"rows\": 1500, \"nulls\": 0, \"contract\": \"stg_customers.account_balance is contracted as decimal(15,2)\", \"convertible\": 1500, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"1\": 1500}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.9047, \"lossless\": false, \"issues\": [\"values arrive with at most 1 decimal places where the contract keeps 2; the missing digits can't be recovered\"], \"conversion\": null}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": "c_acctbal",
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "The stg_customers model contract expects account_balance as DECIMAL(15,2) but the source raw.customer.c_acctbal is VARCHAR. profile_column shows conversion to DECIMAL(15,2) is not lossless (only 1 decimal place, contract requires 2). The model selects the column without casting, causing a contract type mismatch error. Since the source data cannot be losslessly converted, the problem originates upstream and must be escalated."
+      }
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "id": "inc061",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.lineitem",
+    "root_column": "l_extendedprice",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.lineitem",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 21639
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 98.5,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_lineitem fails its column contract: `extended_price` is BIGINT but expected DECIMAL(15,2), and `net_revenue` is DECIMAL(35,2) but expected DECIMAL(18,4). This indicates a schema change in the source or a typo in the model definition.",
+        "suspects": [
+          "source raw.lineitem (check the upstream raw table definition and any recent schema changes)",
+          "models/staging/stg_lineitem.sql (verify column casts and data types)",
+          "dbt schema contracts (dbt_project.yml or schema.yml for stg_lineitem) for outdated expectations"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice BIGINT\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdate"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_lineitem"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_lineitem\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"path\": \"models/staging/stg_lineitem.sql\", \"sql\": \"select\\n    l_orderkey || '-' || l_linenumber as order_line_id,\\n    l_orderkey as order_key,\\n    l_linenumber as line_number,\\n    l_partkey as part_key,\\n    l_suppkey as supplier_key,\\n    l_quantity as quantity,\\n    l_extendedprice as extended_price,\\n    l_discount as discount,\\n    l_tax as tax,\\n    l_returnflag as return_flag,\\n    l_shipdate as ship_date,\\n    l_extendedprice * (1 - l_discount) as net_revenue\\nfrom {{ source('raw', '"
+    },
+    {
+      "agent": "investigate",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.lineitem",
+        "column": "l_extendedprice"
+      },
+      "result": "{\"column\": \"raw.lineitem.l_extendedprice\", \"current_type\": \"bigint\", \"target_type\": \"decimal(15,2)\", \"rows\": 60175, \"nulls\": 0, \"contract\": \"stg_lineitem.extended_price is contracted as decimal(15,2)\", \"convertible\": 60175, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"0\": 60175}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.0, \"lossless\": false, \"issues\": [\"no value has a fractional part although the contract keeps 2 decimal places; if the source used to send fractions, they were dropped before arriving\"], \"conversion\": null}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT typeof(l_extendedprice * (1 - l_discount)) AS type, COUNT(*) FROM raw.lineitem"
+      },
+      "result": "{\"error\": \"Binder Error: column \\\"l_extendedprice\\\" must appear in the GROUP BY clause or must be part of an aggregate function.\"}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.lineitem",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "stg_lineitem contract expects extended_price DECIMAL(15,2) and net_revenue DECIMAL(18,4). The model selects l_extendedprice (BIGINT) and computes net_revenue from it. profile_column on raw.lineitem.l_extendedprice shows source type BIGINT, lossless=false, all values have zero decimal places, meaning source stopped providing cents. The contract mismatch cannot be fixed by a simple cast without inventing data, so the schema drift originates in the raw source table."
+      }
+    }
+  ]
+}

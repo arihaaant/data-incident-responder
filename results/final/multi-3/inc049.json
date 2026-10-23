@@ -1,0 +1,93 @@
+{
+  "id": "inc049",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 13234
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 136.3,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "The freshness test `assert_orders_fresh` found 1 row that is older than the allowed threshold, indicating delayed or missing recent order data.",
+        "suspects": [
+          "raw.orders source table \u2013 check ingestion timestamps and any recent ETL failures",
+          "staging.orders model \u2013 verify that the `loaded_at` or `order_timestamp` columns are being propagated correctly",
+          "the freshness test configuration in `dbt_project.yml` or the `sources.yml` for the orders source (max_age setting)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "raw.orders"
+      },
+      "result": "{\"node\": \"source.tpch_warehouse.raw.orders\", \"upstream\": [], \"downstream\": [\"stg_orders\"], \"checks\": []}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) as cnt, MIN(_loaded_at) as min_loaded, MAX(_loaded_at) as max_loaded FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"cnt\", \"min_loaded\", \"max_loaded\"], \"rows\": [[\"14941\", \"1992-01-02 00:00:00\", \"1998-07-26 00:00:00\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "Freshness test `assert_orders_fresh` failed (1 row older than threshold). raw.orders _loaded_at ranges from 1992-01-02 to 1998-07-26, far older than expected. stg_orders just passes through _loaded_at, so the problem originates in the source data not being refreshed. No code change can fix missing recent data; source owner must address ingestion."
+      }
+    }
+  ]
+}

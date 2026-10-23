@@ -1,0 +1,156 @@
+{
+  "id": "inc055",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "model.stg_orders",
+    "root_column": "order_date",
+    "cause": "code_change",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "model.stg_orders",
+    "root_column": null,
+    "cause": "code_change",
+    "escalated_after_failed_fix": false,
+    "tokens": 22982
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n-- Removed restrictive date filter to include all order dates\n",
+    "explanation": "The original model filtered orders to dates before 1998-07-01, but the source data includes orders up to 1998-08-02. This caused missing order keys, breaking the relationships check and freshness test. By removing the date filter (or expanding it to include all dates), we restore the full set of orders, ensuring downstream lineitem relationships and freshness checks pass while keeping column definitions unchanged.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\nwhere o_orderdate < date '1998-07-01'\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 155.6,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "Freshness test on orders failed (1 late row) and a referential integrity test shows 801 lineitems without matching orders, indicating orders data may be delayed or missing.",
+        "suspects": [
+          "source raw.orders (upstream ingestion pipeline)",
+          "stg_orders model (transformation logic)",
+          "stg_lineitem model (foreign key relationship)",
+          "dbt run schedule / data arrival timing"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_lineitem"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_lineitem\", \"upstream\": [\"raw.lineitem\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"assert_discount_in_range\", \"not_null_stg_lineitem_discount\", \"not_null_stg_lineitem_extended_price\", \"not_null_stg_lineitem_order_key\", \"not_null_stg_lineitem_order_line_id\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"unique_stg_lineitem_order_line_id\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT COUNT(*) FROM tpch_warehouse.stg_lineitem) AS lineitem_cnt, (SELECT COUNT(*) FROM tpch_warehouse.stg_orders) AS orders_cnt"
+      },
+      "result": "{\"error\": \"refused: unknown table tpch_warehouse.stg_lineitem, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT COUNT(*) FROM staging.stg_lineitem) AS lineitem_cnt, (SELECT COUNT(*) FROM staging.stg_orders) AS orders_cnt"
+      },
+      "result": "{\"columns\": [\"lineitem_cnt\", \"orders_cnt\"], \"rows\": [[\"60175\", \"14790\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_key) FROM staging.stg_lineitem"
+      },
+      "result": "{\"columns\": [\"count(DISTINCT order_key)\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT (SELECT COUNT(*) FROM raw.orders) AS raw_orders_cnt, (SELECT COUNT(*) FROM raw.lineitem) AS raw_lineitem_cnt"
+      },
+      "result": "{\"columns\": [\"raw_orders_cnt\", \"raw_lineitem_cnt\"], \"rows\": [[\"15000\", \"60175\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(DISTINCT order_key) FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"count(DISTINCT order_key)\"], \"rows\": [[\"14790\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\nwhere o_orderdate < date '1998-07-01'\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MIN(o_orderdate) AS min_date, MAX(o_orderdate) AS max_date FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"min_date\", \"max_date\"], \"rows\": [[\"1992-01-01\", \"1998-08-02\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "model.stg_orders",
+        "root_column": null,
+        "cause": "code_change",
+        "action": "patch",
+        "evidence": "stg_orders filters o_orderdate < '1998-07-01', but raw.orders contains dates up to 1998-08-02. This filter drops 210 order keys, causing 801 lineitems to lack matching orders (relationships check fails) and freshness test on orders reports 1 late row. Adjusting/removing the date filter restores expected row counts and passes checks."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "The original model filtered orders to dates before 1998-07-01, but the source data includes orders up to 1998-08-02. This caused missing order keys, breaking the relationships check and freshness test. By removing the date filter (or expanding it to include all dates), we restore the full set of orders, ensuring downstream lineitem relationships and freshness checks pass while keeping column definitions unchanged.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix removes the restrictive date filter that caused missing order rows, directly addressing the root cause without masking data or altering column definitions."
+      }
+    }
+  ]
+}

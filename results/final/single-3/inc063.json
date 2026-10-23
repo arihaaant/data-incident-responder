@@ -1,0 +1,90 @@
+{
+  "id": "inc063",
+  "kind": "schema_drift",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.customer",
+    "root_column": "c_acctbal",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.customer",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 19377
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 50.9,
+  "steps": [
+    {
+      "agent": "single",
+      "tool": "get_test_results",
+      "args": {},
+      "result": "{\"problems\": [{\"node\": \"model.tpch_warehouse.stg_customers\", \"status\": \"error\", \"failing_rows\": null, \"message\": \"Compilation Error in model stg_customers (models/staging/stg_customers.sql)\\n  This model has an enforced contract that failed.\\n  Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\\n  \\n  | column_name     | definition_type | contract_type | mismatch_reason    |\\n  | --------------- | --------------- | ------------"
+    },
+    {
+      "agent": "single",
+      "tool": "get_lineage",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_customers\", \"upstream\": [\"raw.customer\"], \"downstream\": [\"dim_customers\"], \"checks\": [\"accepted_values_stg_customers_market_segment__AUTOMOBILE__BUILDING__FURNITURE__HOUSEHOLD__MACHINERY\", \"not_null_stg_customers_customer_key\", \"not_null_stg_customers_market_segment\", \"not_null_stg_customers_nation_key\", \"relationships_stg_customers_nation_key__nation_key__ref_stg_nations_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "model.tpch_warehouse.stg_customers"
+      },
+      "result": "{\"error\": \"no model called model.tpch_warehouse.stg_customers\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "single",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal VARCHAR\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_receiptdat"
+    },
+    {
+      "agent": "single",
+      "tool": "profile_column",
+      "args": {
+        "table": "raw.customer",
+        "column": "c_acctbal",
+        "target_type": "DECIMAL(15,2)"
+      },
+      "result": "{\"column\": \"raw.customer.c_acctbal\", \"current_type\": \"varchar\", \"target_type\": \"decimal(15,2)\", \"rows\": 1500, \"nulls\": 0, \"contract\": \"stg_customers.account_balance is contracted as decimal(15,2)\", \"convertible\": 1500, \"fail_to_convert\": 0, \"decimal_places_sent\": {\"1\": 1500}, \"values_changed_by_conversion\": 0, \"share_with_fraction\": 0.9047, \"lossless\": false, \"issues\": [\"values arrive with at most 1 decimal places where the contract keeps 2; the missing digits can't be recovered\"], \"conversion\": null}"
+    },
+    {
+      "agent": "single",
+      "output": {
+        "root_node": "source.raw.customer",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "file": null,
+        "evidence": "The stg_customers model failed contract validation because its column account_balance is defined as VARCHAR, while the staging contract expects DECIMAL(15,2). The raw source column c_acctbal is VARCHAR. Profiling shows conversion to DECIMAL(15,2) is not lossless: raw values have at most 1 decimal place, so converting to 2 decimal places would add missing digits that cannot be recovered. According to team policy, type changes can only be patched if lossless; here they are not, so the issue must be escalated to the source owner. The problem originates at raw.customer."
+      }
+    }
+  ]
+}

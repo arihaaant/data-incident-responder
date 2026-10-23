@@ -1,0 +1,117 @@
+{
+  "id": "inc052",
+  "kind": "late_data",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_orderdate",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.orders",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 20844
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 91.3,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "late_data",
+        "summary": "The freshness test `assert_orders_fresh` found 1 row that is older than the allowed threshold, indicating delayed or missing recent order data.",
+        "suspects": [
+          "raw.orders source table (check ingestion timestamps)",
+          "staging.orders view (ensure it propagates the latest raw data)",
+          "upstream ETL job that loads orders into raw schema"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"unknown model or source assert_orders_fresh\", \"known\": [\"dim_customers\", \"fct_daily_revenue\", \"fct_order_items\", \"fct_orders\", \"raw.customer\", \"raw.lineitem\", \"raw.nation\", \"raw.orders\", \"raw.part\", \"raw.region\", \"stg_customers\", \"stg_lineitem\", \"stg_nations\", \"stg_orders\", \"stg_parts\", \"stg_regions\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_orders\", \"upstream\": [\"raw.orders\"], \"downstream\": [\"fct_orders\"], \"checks\": [\"accepted_values_stg_orders_order_status__F__O__P\", \"assert_orders_fresh\", \"not_null_stg_orders_customer_key\", \"not_null_stg_orders_order_date\", \"not_null_stg_orders_order_key\", \"relationships_stg_lineitem_order_key__order_key__ref_stg_orders_\", \"relationships_stg_orders_customer_key__customer_key__ref_stg_customers_\", \"unique_stg_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM stg_orders ORDER BY loaded_at DESC LIMIT 5"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_orders, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM staging.stg_orders ORDER BY loaded_at DESC LIMIT 5"
+      },
+      "result": "{\"columns\": [\"order_key\", \"customer_key\", \"order_status\", \"total_price\", \"order_date\", \"priority\", \"loaded_at\"], \"rows\": [[\"2758\", \"412\", \"O\", \"42052.59\", \"1998-07-12\", \"5-LOW\", \"1998-07-13 00:00:00\"], [\"11619\", \"55\", \"O\", \"42866.58\", \"1998-07-12\", \"2-HIGH\", \"1998-07-13 00:00:00\"], [\"19396\", \"542\", \"O\", \"44539.47\", \"1998-07-12\", \"3-MEDIUM\", \"1998-07-13 00:00:00\"], [\"40192\", \"686\", \"O\", \"240348.85\", \"1998-07-12\", \"1-URGENT\", \"1998-07-13 00:00:00\"], [\"52418\", \"133\", \"O\", \"53572.64\", \"1998-07-12\", "
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "assert_orders_fresh"
+      },
+      "result": "{\"error\": \"no model called assert_orders_fresh\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MIN(loaded_at) as min_loaded, MAX(loaded_at) as max_loaded, COUNT(*) as total FROM staging.stg_orders"
+      },
+      "result": "{\"columns\": [\"min_loaded\", \"max_loaded\", \"total\"], \"rows\": [[\"1992-01-02 00:00:00\", \"1998-07-13 00:00:00\", \"14856\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT MIN(_loaded_at) as min_loaded, MAX(_loaded_at) as max_loaded, COUNT(*) as total FROM raw.orders"
+      },
+      "result": "{\"columns\": [\"min_loaded\", \"max_loaded\", \"total\"], \"rows\": [[\"1992-01-02 00:00:00\", \"1998-07-13 00:00:00\", \"14856\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "Freshness test assert_orders_fresh failed (1 row older than threshold). stg_orders selects directly from raw.orders. Both raw.orders and staging.stg_orders have same loaded_at range (1992-01-02 to 1998-07-13) and row count (14856). No recent data present, indicating source raw.orders is missing new records. Therefore the issue originates upstream in raw.orders; must be escalated."
+      }
+    }
+  ]
+}

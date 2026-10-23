@@ -1,0 +1,165 @@
+{
+  "id": "inc022",
+  "kind": "null_spike",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.nation",
+    "root_column": "n_regionkey",
+    "cause": "upstream_data",
+    "action": "escalate"
+  },
+  "outcome": {
+    "action": "escalate",
+    "root_node": "source.raw.nation",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 34232
+  },
+  "patch": null,
+  "fix_check": null,
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 180.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "null_spike",
+        "summary": "The not_null test on fct_orders.region_name failed with 1,892 null values, indicating a sudden influx of missing region names in the fact table.",
+        "suspects": [
+          "source: raw.orders (the upstream raw table that provides region_name)",
+          "staging model: staging.stg_orders (the view that cleans and maps region_name)",
+          "mart model: marts.fct_orders (the downstream fact table where the nulls appear)"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "marts.fct_orders"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.fct_orders\", \"upstream\": [\"dim_customers\", \"fct_order_items\", \"stg_orders\"], \"downstream\": [\"fct_daily_revenue\"], \"checks\": [\"assert_net_revenue_not_negative\", \"not_null_fct_orders_net_revenue\", \"not_null_fct_orders_order_key\", \"not_null_fct_orders_region_name\", \"unique_fct_orders_order_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_orders"
+      },
+      "result": "{\"path\": \"models/staging/stg_orders.sql\", \"sql\": \"select\\n    o_orderkey as order_key,\\n    o_custkey as customer_key,\\n    o_orderstatus as order_status,\\n    o_totalprice as total_price,\\n    o_orderdate as order_date,\\n    o_orderpriority as priority,\\n    _loaded_at as loaded_at\\nfrom {{ source('raw', 'orders') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "fct_orders"
+      },
+      "result": "{\"path\": \"models/marts/fct_orders.sql\", \"sql\": \"with items as (\\n    select\\n        order_key,\\n        count(*) as item_count,\\n        sum(extended_price) as gross_revenue,\\n        sum(net_revenue) as net_revenue\\n    from {{ ref('fct_order_items') }}\\n    group by order_key\\n)\\n\\nselect\\n    o.order_key,\\n    o.customer_key,\\n    c.region_name,\\n    o.order_status,\\n    o.order_date,\\n    o.priority,\\n    coalesce(i.item_count, 0) as item_count,\\n    coalesce(i.gross_revenue, 0) as gross_re"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "dim_customers"
+      },
+      "result": "{\"path\": \"models/marts/dim_customers.sql\", \"sql\": \"select\\n    c.customer_key,\\n    c.customer_name,\\n    c.market_segment,\\n    c.account_balance,\\n    n.nation_name,\\n    r.region_name\\nfrom {{ ref('stg_customers') }} c\\njoin {{ ref('stg_nations') }} n on c.nation_key = n.nation_key\\njoin {{ ref('stg_regions') }} r on n.region_key = r.region_key\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total, COUNT(region_name) AS not_null, COUNT(*)-COUNT(region_name) AS nulls FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"total\", \"not_null\", \"nulls\"], \"rows\": [[\"1319\", \"1319\", \"0\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_orders FROM marts.fct_orders"
+      },
+      "result": "{\"columns\": [\"total_orders\"], \"rows\": [[\"15000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_customers"
+      },
+      "result": "{\"path\": \"models/staging/stg_customers.sql\", \"sql\": \"select\\n    c_custkey as customer_key,\\n    c_name as customer_name,\\n    c_address as address,\\n    c_phone as phone,\\n    c_nationkey as nation_key,\\n    c_mktsegment as market_segment,\\n    c_acctbal as account_balance\\nfrom {{ source('raw', 'customer') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS null_region FROM marts.fct_orders WHERE region_name IS NULL"
+      },
+      "result": "{\"columns\": [\"null_region\"], \"rows\": [[\"1892\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM stg_customers"
+      },
+      "result": "{\"error\": \"refused: unknown table stg_customers, use schema.table with schema raw, staging or marts\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM staging.stg_customers"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS missing_cust FROM marts.fct_orders o LEFT JOIN marts.dim_customers c ON o.customer_key = c.customer_key WHERE c.customer_key IS NULL"
+      },
+      "result": "{\"columns\": [\"missing_cust\"], \"rows\": [[\"1892\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS dim_cnt FROM marts.dim_customers"
+      },
+      "result": "{\"columns\": [\"dim_cnt\"], \"rows\": [[\"1319\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS raw_cnt FROM raw.customer"
+      },
+      "result": "{\"columns\": [\"raw_cnt\"], \"rows\": [[\"1500\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS cnt FROM staging.stg_nations"
+      },
+      "result": "{\"columns\": [\"cnt\"], \"rows\": [[\"25\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.nation",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "escalate",
+        "evidence": "marts.fct_orders has 1892 null region_name rows; these correspond to orders whose customer_key missing in marts.dim_customers (missing_cust=1892). marts.dim_customers has 1319 rows vs staging.stg_customers 1500 rows, indicating 181 customers dropped due to inner joins on stg_nations and stg_regions. This suggests missing or mismatched nation/region keys in the raw.nation (or raw.region) source, causing customers to be excluded upstream. Since the nulls stem from missing source reference data, the issue is upstream data and should be escalated to the source owner."
+      }
+    }
+  ]
+}

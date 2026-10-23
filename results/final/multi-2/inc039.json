@@ -1,0 +1,186 @@
+{
+  "id": "inc039",
+  "kind": "duplicates",
+  "split": "holdout",
+  "expected": {
+    "root_node": "source.raw.part",
+    "root_column": "p_partkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.part",
+    "root_column": null,
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 42027
+  },
+  "patch": {
+    "file": "models/staging/stg_parts.sql",
+    "sql": "select distinct\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}",
+    "explanation": "Added DISTINCT to the select to remove exact duplicate rows that were causing the unique_stg_parts_part_key check to fail. This preserves the original column names and types while ensuring each part_key appears only once.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    p_partkey as part_key,\n    p_name as part_name,\n    p_brand as brand,\n    p_type as part_type,\n    p_retailprice as retail_price\nfrom {{ source('raw', 'part') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": false,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 309.0,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "duplicates",
+        "summary": "The uniqueness test on stg_parts.part_key failed with 200 duplicate rows, indicating duplicate primary key values in the staging layer.",
+        "suspects": [
+          "stg_parts model (staging.parts)",
+          "raw.parts source table"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_lineage",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"node\": \"model.tpch_warehouse.stg_parts\", \"upstream\": [\"raw.part\"], \"downstream\": [\"fct_order_items\"], \"checks\": [\"not_null_stg_parts_part_key\", \"unique_stg_parts_part_key\"]}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT part_key) AS distinct_keys FROM raw.part"
+      },
+      "result": "{\"error\": \"Binder Error: Referenced column \\\"part_key\\\" not found in FROM clause!\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT COUNT(*) AS total_rows, COUNT(DISTINCT p_partkey) AS distinct_keys FROM raw.part"
+      },
+      "result": "{\"columns\": [\"total_rows\", \"distinct_keys\"], \"rows\": [[\"2200\", \"2000\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt FROM raw.part GROUP BY p_partkey HAVING cnt > 1 LIMIT 5"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\"], \"rows\": [[\"11\", \"2\"], [\"16\", \"2\"], [\"32\", \"2\"], [\"37\", \"2\"], [\"53\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "get_model_sql",
+      "args": {
+        "name": "stg_parts"
+      },
+      "result": "{\"path\": \"models/staging/stg_parts.sql\", \"sql\": \"select\\n    p_partkey as part_key,\\n    p_name as part_name,\\n    p_brand as brand,\\n    p_type as part_type,\\n    p_retailprice as retail_price\\nfrom {{ source('raw', 'part') }}\\n\"}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.part WHERE p_partkey = 11"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"p_name\", \"p_mfgr\", \"p_brand\", \"p_type\", \"p_size\", \"p_container\", \"p_retailprice\", \"p_comment\"], \"rows\": [[\"11\", \"spring maroon seashell almond orchid\", \"Manufacturer#2\", \"Brand#25\", \"STANDARD BURNISHED NICKEL\", \"43\", \"WRAP BOX\", \"911.01\", \"ole c\"], [\"11\", \"spring maroon seashell almond orchid\", \"Manufacturer#2\", \"Brand#25\", \"STANDARD BURNISHED NICKEL\", \"43\", \"WRAP BOX\", \"911.01\", \"ole c\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt FROM raw.part GROUP BY p_partkey HAVING cnt > 1 ORDER BY cnt DESC LIMIT 5"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\"], \"rows\": [[\"11\", \"2\"], [\"16\", \"2\"], [\"32\", \"2\"], [\"37\", \"2\"], [\"53\", \"2\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.part WHERE p_partkey = 16"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"p_name\", \"p_mfgr\", \"p_brand\", \"p_type\", \"p_size\", \"p_container\", \"p_retailprice\", \"p_comment\"], \"rows\": [[\"16\", \"deep sky turquoise drab peach\", \"Manufacturer#3\", \"Brand#32\", \"PROMO PLATED TIN\", \"2\", \"MED PACK\", \"916.01\", \"ously \"], [\"16\", \"deep sky turquoise drab peach\", \"Manufacturer#3\", \"Brand#32\", \"PROMO PLATED TIN\", \"2\", \"MED PACK\", \"916.01\", \"ously \"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_mfgr) AS mfgr_cnt, COUNT(DISTINCT p_brand) AS brand_cnt FROM raw.part WHERE p_partkey IN (SELECT p_partkey FROM raw.part GROUP BY p_partkey HAVING COUNT(*) > 1) GROUP BY p_partkey LIMIT 5"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"name_cnt\", \"mfgr_cnt\", \"brand_cnt\"], \"rows\": [[\"537\", \"1\", \"1\", \"1\"], [\"1916\", \"1\", \"1\", \"1\"], [\"53\", \"1\", \"1\", \"1\"], [\"1558\", \"1\", \"1\", \"1\"], [\"837\", \"1\", \"1\", \"1\"]], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_mfgr) AS mfgr_cnt, COUNT(DISTINCT p_brand) AS brand_cnt, COUNT(DISTINCT p_type) AS type_cnt FROM raw.part GROUP BY p_partkey HAVING cnt > 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\", \"name_cnt\", \"mfgr_cnt\", \"brand_cnt\", \"type_cnt\"], \"rows\": [[\"116\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"258\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"274\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"595\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"858\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"974\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1032\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1237\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1374\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"1716\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"2000\", \"2\", \"1\", \"1\", \"1\", \"1\"], [\"58\", \"2\", \"1\", \"1\", \"1\", \"1"
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT p_partkey, COUNT(*) AS cnt, COUNT(DISTINCT p_name) AS name_cnt, COUNT(DISTINCT p_mfgr) AS mfgr_cnt, COUNT(DISTINCT p_brand) AS brand_cnt, COUNT(DISTINCT p_type) AS type_cnt, COUNT(DISTINCT p_size) AS size_cnt, COUNT(DISTINCT p_container) AS cont_cnt, COUNT(DISTINCT p_retailprice) AS price_cnt, COUNT(DISTINCT p_comment) AS comment_cnt FROM raw.part GROUP BY p_partkey HAVING cnt > 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"cnt\", \"name_cnt\", \"mfgr_cnt\", \"brand_cnt\", \"type_cnt\", \"size_cnt\", \"cont_cnt\", \"price_cnt\", \"comment_cnt\"], \"rows\": [[\"174\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"337\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"358\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"411\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"511\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"574\", \"2\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\", \"1\"], [\"611\", \"2\", \"1\", \"1\", \"1\", \"1\","
+    },
+    {
+      "agent": "investigate",
+      "tool": "run_sql",
+      "args": {
+        "query": "SELECT * FROM raw.part WHERE p_partkey = 11 EXCEPT SELECT * FROM raw.part WHERE p_partkey = 11 LIMIT 1"
+      },
+      "result": "{\"columns\": [\"p_partkey\", \"p_name\", \"p_mfgr\", \"p_brand\", \"p_type\", \"p_size\", \"p_container\", \"p_retailprice\", \"p_comment\"], \"rows\": [], \"truncated\": false}"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.part",
+        "root_column": null,
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.part has 2200 rows but only 2000 distinct p_partkey values; duplicate rows exist for many keys (e.g., p_partkey=11 appears twice with identical column values). stg_parts simply selects from raw.part, so duplicates propagate, causing unique_stg_parts_part_key check to fail with 200 duplicate rows. Duplicates are identical across all columns, indicating a delivery duplication, which can be fixed by deduplicating in the staging model."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_parts.sql",
+        "explanation": "Added DISTINCT to the select to remove exact duplicate rows that were causing the unique_stg_parts_part_key check to fail. This preserves the original column names and types while ensuring each part_key appears only once.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly removes exact duplicate rows causing the unique key check to fail without masking data or altering logic."
+      }
+    }
+  ]
+}

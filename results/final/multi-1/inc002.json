@@ -1,0 +1,90 @@
+{
+  "id": "inc002",
+  "kind": "schema_drift",
+  "split": "dev",
+  "expected": {
+    "root_node": "source.raw.orders",
+    "root_column": "o_custkey",
+    "cause": "upstream_data",
+    "action": "patch"
+  },
+  "outcome": {
+    "action": "patch",
+    "root_node": "source.raw.orders",
+    "root_column": "o_customer_key",
+    "cause": "upstream_data",
+    "escalated_after_failed_fix": false,
+    "tokens": 5892
+  },
+  "patch": {
+    "file": "models/staging/stg_orders.sql",
+    "sql": "select\n    o_orderkey as order_key,\n    o_customer_key as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}",
+    "explanation": "The upstream raw.orders table renamed column o_custkey to o_customer_key. The staging model referenced the old name, causing a compile error. Updated the SELECT to use o_customer_key while preserving the original alias (customer_key) and all other columns unchanged, ensuring lossless rename and maintaining column contracts.",
+    "dry_run": {
+      "problems": [],
+      "skipped_downstream": 0,
+      "passes": true
+    },
+    "original": "select\n    o_orderkey as order_key,\n    o_custkey as customer_key,\n    o_orderstatus as order_status,\n    o_totalprice as total_price,\n    o_orderdate as order_date,\n    o_orderpriority as priority,\n    _loaded_at as loaded_at\nfrom {{ source('raw', 'orders') }}\n"
+  },
+  "fix_check": {
+    "builds_and_passes": true,
+    "checks_intact": true,
+    "tables_match": true,
+    "ok": true
+  },
+  "score": {
+    "root_node_correct": true,
+    "root_column_correct": true,
+    "cause_correct": true,
+    "action_correct": true,
+    "resolved": true
+  },
+  "seconds": 110.4,
+  "steps": [
+    {
+      "agent": "triage",
+      "output": {
+        "kind": "schema_drift",
+        "summary": "The staging model stg_orders fails to compile because it references column `o_custkey` which no longer exists in the source; the source now provides `o_customer_key` (and other columns). This is a schema change in the raw orders table.",
+        "suspects": [
+          "raw.orders source definition (schema in DuckDB)",
+          "models/staging/stg_orders.sql"
+        ]
+      }
+    },
+    {
+      "agent": "investigate",
+      "tool": "list_tables",
+      "args": {
+        "schema": "raw"
+      },
+      "result": "{\"raw.customer\": [\"c_custkey BIGINT\", \"c_name VARCHAR\", \"c_address VARCHAR\", \"c_nationkey INTEGER\", \"c_phone VARCHAR\", \"c_acctbal DECIMAL(15,2)\", \"c_mktsegment VARCHAR\", \"c_comment VARCHAR\"], \"raw.lineitem\": [\"l_orderkey BIGINT\", \"l_partkey BIGINT\", \"l_suppkey BIGINT\", \"l_linenumber BIGINT\", \"l_quantity DECIMAL(15,2)\", \"l_extendedprice DECIMAL(15,2)\", \"l_discount DECIMAL(15,2)\", \"l_tax DECIMAL(15,2)\", \"l_returnflag VARCHAR\", \"l_linestatus VARCHAR\", \"l_shipdate DATE\", \"l_commitdate DATE\", \"l_rece"
+    },
+    {
+      "agent": "investigate",
+      "output": {
+        "root_node": "source.raw.orders",
+        "root_column": "o_customer_key",
+        "cause": "upstream_data",
+        "action": "patch",
+        "evidence": "raw.orders table no longer has column o_custkey; it now has o_customer_key. stg_orders model references o_custkey, causing compile error. This is a schema change upstream; fixing by updating stg_orders to use o_customer_key is a lossless rename patch."
+      }
+    },
+    {
+      "agent": "fix",
+      "output": {
+        "file": "models/staging/stg_orders.sql",
+        "explanation": "The upstream raw.orders table renamed column o_custkey to o_customer_key. The staging model referenced the old name, causing a compile error. Updated the SELECT to use o_customer_key while preserving the original alias (customer_key) and all other columns unchanged, ensuring lossless rename and maintaining column contracts.",
+        "dry_run_passes": true
+      }
+    },
+    {
+      "agent": "review",
+      "output": {
+        "approved": true,
+        "reasons": "Fix correctly updates the staging model to reference the renamed source column (o_customer_key) while preserving the original alias and other columns. This addresses the compile error caused by the upstream schema change without masking data."
+      }
+    }
+  ]
+}
