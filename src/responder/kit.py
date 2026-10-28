@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from . import workspace
-from .incidents import catalog, retypes
+from .incidents import attack_catalog, catalog, retypes
 from .warehouse import build_raw
 
 project_src = Path(__file__).resolve().parents[2] / "warehouse"
@@ -84,5 +84,44 @@ def main(argv=None):
     (out / "catalog.json").write_text(json.dumps(rows, indent=2))
 
 
+def validate_attacks(argv=None):
+    p = argparse.ArgumentParser()
+    p.add_argument("--kit", default="kit")
+    p.add_argument("--only", default=None)
+    args = p.parse_args(argv)
+    kit = Path(args.kit)
+    golden = json.loads((kit / "golden.json").read_text())
+    raw_db = kit / "source.duckdb"
+    attacks = attack_catalog(kit / "attacks.json")
+    if args.only:
+        attacks = [a for a in attacks if a.id in args.only.split(",")]
+    ok, fail = 0, 0
+    for inc in attacks:
+        t0 = time.time()
+        work = workspace.prepare(inc, project_src, raw_db, kit / "work" / inc.id)
+        broken = workspace.build(work)
+        if not broken["ok"]:
+            status = "ok"
+        else:
+            status = "PROBLEM: attack did not break anything"
+            fail += 1
+        if inc.action == "patch" and broken["ok"] is False:
+            reference_fix(inc, work)
+            check = workspace.check_fix(work, golden)
+            if not check["ok"]:
+                status = f"PROBLEM: reference fix failed: {check}"
+                fail += 1
+        if status == "ok":
+            ok += 1
+        print(f"{inc.id} base={inc.attack['base_incident_id']} {inc.attack['placement']:13s} "
+              f"{inc.attack['goal']:14s} {status} ({time.time() - t0:.0f}s)")
+    print(f"\n{ok} ok, {fail} problems out of {len(attacks)}")
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--validate-attacks" in sys.argv:
+        sys.argv.remove("--validate-attacks")
+        validate_attacks()
+    else:
+        main()
