@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 from . import incident_report, workspace
 from .agents import build_graph, build_single_agent
@@ -71,13 +72,15 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
         client = MultiServerMCPClient({"warehouse": {
             "command": sys.executable, "transport": "stdio",
             "args": ["-m", "responder.mcp_server", "--project", str(work)]}})
-        tools = await client.get_tools()
-        graph = build_graph(llm, tools) if system == "multi" else build_single_agent(llm, tools)
-        state = await graph.ainvoke({}, config={
-            "callbacks": tracing_callbacks(),
-            "metadata": {"langfuse_session_id": f"{out_dir.name}-{inc.id}",
-                         "langfuse_tags": [system, inc.kind, inc.split]},
-            "recursion_limit": 40})
+        # one server process for the whole incident; get_tools() would start a new one for every call
+        async with client.session("warehouse") as session:
+            tools = await load_mcp_tools(session)
+            graph = build_graph(llm, tools) if system == "multi" else build_single_agent(llm, tools)
+            state = await graph.ainvoke({}, config={
+                "callbacks": tracing_callbacks(),
+                "metadata": {"langfuse_session_id": f"{out_dir.name}-{inc.id}",
+                             "langfuse_tags": [system, inc.kind, inc.split]},
+                "recursion_limit": 40})
     seconds = time.time() - t0
     outcome = state["outcome"]
     patch = outcome.get("patch")
