@@ -25,6 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 figures = ["matplotlib>=3.8"]
+attacks = ["agentdojo>=0.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

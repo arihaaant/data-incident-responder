@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+from .attack_analysis import analyse, load_attack_records  # noqa: E402
 from .compare import compare, load_runs  # noqa: E402
 
 themes = {
@@ -98,9 +99,67 @@ def by_kind(results, t, path):
     plt.close(fig)
 
 
+def attack_success(attack_results, t, path):
+    systems = [s for s in ("multi", "single", "multi-rules") if s in attack_results["rates"]]
+    if not systems:
+        return
+    metrics = [("reached", "Attack succeeded"), ("attempted", "Attack attempted"), ("echoed", "Canary echoed")]
+    fig, axes = plt.subplots(1, len(metrics), figsize=(12, 2.9), facecolor=t["surface"], sharey=True)
+    for ax, (metric, title) in zip(axes, metrics):
+        style(ax, t)
+        for i, s in enumerate(systems):
+            y = len(systems) - 1 - i
+            val = 100 * attack_results["rates"][s][metric]
+            color = t["series"][0] if s == "multi" else t["series"][1] if s == "single" else t["rest"]
+            ax.barh(y, val, height=0.34, color=color, zorder=2)
+            ax.text(min(val, 100) + 1.5, y, f"{val:.0f}%", va="center", ha="left",
+                    color=t["ink"], fontsize=10)
+        ax.set_yticks(range(len(systems)))
+        ax.set_yticklabels([names.get(s, s) for s in reversed(systems)], color=t["ink"])
+        ax.set_title(title, loc="left", color=t["ink"], fontsize=11, fontweight="bold", pad=10)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.savefig(path, dpi=180, facecolor=t["surface"])
+    plt.close(fig)
+
+
+def stopped_by_chart(attack_results, t, path):
+    systems = [s for s in ("multi", "single", "multi-rules") if s in attack_results["stopped_by"]]
+    if not systems:
+        return
+    layers = ["sql_guard", "code_rules", "dry_run", "model_reviewer", "agent_itself"]
+    layer_colors = {
+        "sql_guard": t["series"][0], "code_rules": t["series"][1], "dry_run": t["series"][2],
+        "model_reviewer": t["rest"], "agent_itself": t["muted"],
+    }
+    fig, ax = plt.subplots(figsize=(10, 2.5 + 0.5 * len(systems)), facecolor=t["surface"])
+    style(ax, t)
+    for i, s in enumerate(systems):
+        y = len(systems) - 1 - i
+        left = 0
+        dist = attack_results["stopped_by"].get(s, {})
+        for layer in layers:
+            val = 100 * dist.get(layer, {}).get("rate", 0)
+            if val > 0:
+                ax.barh(y, val, left=left, height=0.34, color=layer_colors[layer], zorder=2)
+                if val > 5:
+                    ax.text(left + val / 2, y, layer.replace("_", " "), va="center", ha="center",
+                            color=t["surface"], fontsize=8)
+                left += val
+    ax.set_yticks(range(len(systems)))
+    ax.set_yticklabels([names.get(s, s) for s in reversed(systems)], color=t["ink"])
+    ax.set_title("Which layer stopped the attack", loc="left", color=t["ink"], fontsize=11, fontweight="bold", pad=10)
+    fig.tight_layout()
+    fig.savefig(path, dpi=180, facecolor=t["surface"])
+    plt.close(fig)
+
+
+names |= {"multi-rules": "Multi (no reviewer)", "multi+spotlight": "Multi + spotlight"}
+
+
 def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("folder")
+    p.add_argument("--attacks", default=None)
     p.add_argument("--out", default="docs")
     args = p.parse_args(argv)
     results = compare(load_runs(args.folder))
@@ -110,6 +169,12 @@ def main(argv=None):
         suffix = "" if mode == "light" else "-dark"
         headline(results, t, out / f"results{suffix}.png")
         by_kind(results, t, out / f"by_kind{suffix}.png")
+    if args.attacks:
+        attack_results = analyse(args.attacks)
+        for mode, t in themes.items():
+            suffix = "" if mode == "light" else "-dark"
+            attack_success(attack_results, t, out / f"attack_success{suffix}.png")
+            stopped_by_chart(attack_results, t, out / f"stopped_by{suffix}.png")
     print("wrote", sorted(str(f) for f in out.glob("*.png")))
 
 
