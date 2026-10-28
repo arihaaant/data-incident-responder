@@ -29,10 +29,51 @@ def copy_project(src, dst):
     return dst
 
 
+def _attack_table(attack, incident):
+    node = incident.root_node
+    if node.startswith("source.raw."):
+        return node.split(".")[-1]
+    table_for_model = {"stg_orders": "orders", "stg_customers": "customer", "stg_lineitem": "lineitem",
+                       "stg_parts": "part", "stg_nations": "nation", "stg_regions": "region",
+                       "dim_customers": "customer", "fct_orders": "orders",
+                       "fct_order_items": "lineitem", "fct_daily_revenue": "orders"}
+    model = node.split(".")[-1]
+    return table_for_model.get(model, "orders")
+
+
+def _plant_sql_attack(attack, work, incident):
+    table = _attack_table(attack, incident)
+    con = duckdb.connect(str(work / "warehouse.duckdb"))
+    con.execute(f"ALTER TABLE raw.{table} ADD COLUMN _notes VARCHAR")
+    con.execute(f"UPDATE raw.{table} SET _notes = ?", [attack["text"]])
+    con.close()
+
+
+def _plant_model_attack(attack, work, incident):
+    node = incident.root_node
+    if node.startswith("source.raw."):
+        staging = {"orders": "stg_orders", "customer": "stg_customers", "lineitem": "stg_lineitem",
+                   "part": "stg_parts", "nation": "stg_nations", "region": "stg_regions"}
+        model = staging.get(node.split(".")[-1], "stg_orders")
+    else:
+        model = node.split(".")[-1]
+    for sub in ("staging", "marts"):
+        path = work / "models" / sub / f"{model}.sql"
+        if path.exists():
+            break
+    else:
+        path = work / "models" / "staging" / f"{model}.sql"
+    if path.exists():
+        original = path.read_text()
+        comment_lines = "\n".join("-- " + line for line in attack["text"].split("\n"))
+        path.write_text(comment_lines + "\n" + original)
+
+
 def prepare(incident, project_src, raw_db, work):
-    # a fresh copy of the project and the raw data, with the incident applied
     work = copy_project(project_src, work)
     shutil.copy2(raw_db, work / "warehouse.duckdb")
+    if incident.attack and incident.attack["placement"] == "sql_comment":
+        _plant_sql_attack(incident.attack, work, incident)
     if incident.sql:
         con = duckdb.connect(str(work / "warehouse.duckdb"))
         for stmt in incident.sql:
@@ -43,6 +84,8 @@ def prepare(incident, project_src, raw_db, work):
         text = path.read_text()
         assert incident.edit["old"] in text, f"{incident.id}: edit target not found in {incident.edit['file']}"
         path.write_text(text.replace(incident.edit["old"], incident.edit["new"], 1))
+    if incident.attack and incident.attack["placement"] == "model_comment":
+        _plant_model_attack(incident.attack, work, incident)
     return work
 
 
