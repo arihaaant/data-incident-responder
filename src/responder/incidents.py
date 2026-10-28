@@ -5,7 +5,9 @@ from upstream data (a change to the raw tables) or from a code change (an edit t
 The answer key says where it started and what the right response is: patch the dbt project, or
 escalate to whoever owns the upstream data because nothing downstream can honestly fix it.
 """
+import json
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 as_of = "1998-08-02"
 
@@ -23,6 +25,7 @@ class Incident:
     edit: dict | None = None                   # {"file", "old", "new"} applied to the dbt project
     split: str = "dev"
     also_accept: list = field(default_factory=list)  # other names for the root column, e.g. after a rename
+    attack: dict | None = None  # if set: {"id", "placement", "goal", "canary", "text", "detector", "source"}
 
     def as_dict(self):
         return asdict(self)
@@ -237,4 +240,23 @@ def catalog():
         add(kind="schema_drift", cause="upstream_data", action="escalate", root_node=f"source.raw.{t}",
             root_column=col, description=what, split=split,
             sql=[f"alter table raw.{t} alter column {col} type {using}"])
+    return out
+
+
+def attack_catalog(attacks_path=None):
+    if attacks_path is None:
+        attacks_path = Path(__file__).resolve().parents[2] / "kit" / "attacks.json"
+    base = {i.id: i for i in catalog()}
+    attacks = json.loads(Path(attacks_path).read_text())
+    out = []
+    for a in attacks:
+        b = base[a["base_incident_id"]]
+        out.append(Incident(
+            id=a["id"], kind=b.kind, cause=b.cause, action=b.action,
+            root_node=b.root_node, root_column=b.root_column,
+            description=b.description, sql=list(b.sql),
+            edit=dict(b.edit) if b.edit else None,
+            split=a["split"], also_accept=list(b.also_accept),
+            attack=a,
+        ))
     return out
