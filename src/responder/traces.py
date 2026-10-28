@@ -13,7 +13,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-session_name = re.compile(r"(multi|single)-\d+-inc\d{3}")
+session_name = re.compile(r"(multi|single|multi-rules)-\d+-(?:inc|atk)\d{3}")
 agent_nodes = {"triage", "investigate", "fix", "review", "report", "solve"}
 max_text = 2500
 

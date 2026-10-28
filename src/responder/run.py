@@ -15,7 +15,8 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 
 from . import incident_report, workspace
 from .agents import build_graph, build_single_agent
-from .incidents import catalog
+from .incidents import attack_catalog, catalog
+from .judge import judge
 from .llm import make_llm, tracing_callbacks
 from .tools import problems
 
@@ -59,8 +60,7 @@ def rules_baseline(work):
         "cause": "upstream_data", "patch": None, "escalated_after_failed_fix": False, "tokens": 0}}
 
 
-async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
-    # the working copy of the warehouse is scratch, keep it off the results folder (on colab that is drive)
+async def run_one(inc, out_dir, llm, kit, golden, system="multi", defense=None):
     scratch = Path(tempfile.gettempdir()) / "responder-work" / f"{out_dir.parent.name}-{out_dir.name}" / inc.id
     work = workspace.prepare(inc, root / "warehouse", kit / "source.duckdb", scratch)
     workspace.build(work)
@@ -72,14 +72,22 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
         client = MultiServerMCPClient({"warehouse": {
             "command": sys.executable, "transport": "stdio",
             "args": ["-m", "responder.mcp_server", "--project", str(work)]}})
-        # one server process for the whole incident; get_tools() would start a new one for every call
         async with client.session("warehouse") as session:
             tools = await load_mcp_tools(session)
-            graph = build_graph(llm, tools) if system == "multi" else build_single_agent(llm, tools)
+            spot = defense == "spotlight"
+            if system == "single":
+                graph = build_single_agent(llm, tools, spotlight=spot)
+            elif system == "multi-rules":
+                graph = build_graph(llm, tools, model_review=False, spotlight=spot)
+            else:
+                graph = build_graph(llm, tools, spotlight=spot)
+            tags = [system, inc.kind, inc.split]
+            if inc.attack:
+                tags += [f"placement:{inc.attack['placement']}", f"goal:{inc.attack['goal']}"]
             state = await graph.ainvoke({}, config={
                 "callbacks": tracing_callbacks(),
                 "metadata": {"langfuse_session_id": f"{out_dir.name}-{inc.id}",
-                             "langfuse_tags": [system, inc.kind, inc.split]},
+                             "langfuse_tags": tags},
                 "recursion_limit": 40})
     seconds = time.time() - t0
     outcome = state["outcome"]
@@ -98,7 +106,9 @@ async def run_one(inc, out_dir, llm, kit, golden, system="multi"):
         "root_node": inc.root_node, "root_column": inc.root_column, "cause": inc.cause, "action": inc.action},
         "outcome": {k: v for k, v in outcome.items() if k != "patch"}, "patch": outcome["patch"],
         "fix_check": fix_check, "score": score(inc, outcome, fix_check), "seconds": round(seconds, 1),
-        "steps": state["steps"]}
+        "steps": state["steps"], "attack": inc.attack}
+    if inc.attack:
+        record["attack_judge"] = judge(record)
     (out_dir / f"{inc.id}.json").write_text(json.dumps(record, indent=2, default=str))
     (out_dir / f"{inc.id}.md").write_text(report, encoding="utf-8")
     return record
@@ -110,15 +120,16 @@ async def main_async(args):
     kit = root / "kit"
     golden = json.loads((kit / "golden.json").read_text())
     llm = None if args.system == "rules" else make_llm(args.provider, args.model, args.temperature)
-    incs = [i for i in catalog() if (not args.ids or i.id in args.ids.split(","))
+    source = attack_catalog() if args.set == "attacks" else catalog()
+    incs = [i for i in source if (not args.ids or i.id in args.ids.split(","))
             and (not args.split or i.split == args.split)
-            and not (out_dir / f"{i.id}.json").exists()]  # resume: finished incidents are skipped
+            and not (out_dir / f"{i.id}.json").exists()]
     gate = asyncio.Semaphore(args.workers)
 
     async def one(inc):
         async with gate:
             try:
-                r = await run_one(inc, out_dir, llm, kit, golden, args.system)
+                r = await run_one(inc, out_dir, llm, kit, golden, args.system, args.defense)
             except Exception as e:  # a failed incident writes no result file, so the next invocation retries it
                 print(f"{inc.id} failed to run: {type(e).__name__}: {str(e)[:200]}")
                 return
@@ -133,8 +144,10 @@ async def main_async(args):
 def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--ids", default=None)
-    p.add_argument("--split", default=None, choices=["dev", "holdout"])
-    p.add_argument("--system", default="multi", choices=["multi", "single", "rules"])
+    p.add_argument("--split", default=None, choices=["dev", "holdout", "test"])
+    p.add_argument("--set", default="incidents", choices=["incidents", "attacks"])
+    p.add_argument("--system", default="multi", choices=["multi", "single", "rules", "multi-rules"])
+    p.add_argument("--defense", default=None, choices=["spotlight"])
     p.add_argument("--provider", default=None)
     p.add_argument("--model", default=None)
     p.add_argument("--temperature", type=float, default=0)
