@@ -160,6 +160,7 @@ def main(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("folder")
     p.add_argument("--attacks", default=None)
+    p.add_argument("--clean", default=None, help="clean evaluation folder for paired resolution")
     p.add_argument("--out", default="docs")
     args = p.parse_args(argv)
     results = compare(load_runs(args.folder))
@@ -170,7 +171,7 @@ def main(argv=None):
         headline(results, t, out / f"results{suffix}.png")
         by_kind(results, t, out / f"by_kind{suffix}.png")
     if args.attacks:
-        attack_results = analyse(args.attacks)
+        attack_results = analyse(args.attacks, args.clean)
         for mode, t in themes.items():
             suffix = "" if mode == "light" else "-dark"
             attack_success(attack_results, t, out / f"attack_success{suffix}.png")
